@@ -4,7 +4,7 @@ Tags: seo, ai, content, agents, publishing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,6 +43,11 @@ Each WordPress site pairs with one Visibility project at a time. Disconnect and 
 In WordPress's `wp_options` table under `visibility_site_token`. Disconnecting deletes it.
 
 == Changelog ==
+
+= 0.3.1 =
+* Fix `modified` field returning a zero date ("-001-11-30T00:00:00+00:00")
+  for freshly created posts where post_modified_gmt hadn't been normalised
+  yet. Falls back to current GMT time when the stored value is empty/zero.
 
 = 0.3.0 =
 * Settings page now shows the connected company and project names (not just

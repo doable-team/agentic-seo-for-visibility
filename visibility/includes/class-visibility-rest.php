@@ -141,6 +141,13 @@ class Visibility_REST {
     if (!$post) {
       return null;
     }
+    // Fresh posts can have a zeroed post_modified_gmt before WP normalises
+    // it — guard against the "-001-11-30T00:00:00+00:00" mysql2date returns
+    // for an empty/zero input by falling back to current time.
+    $modifiedGmt = $post->post_modified_gmt;
+    if (empty($modifiedGmt) || $modifiedGmt === '0000-00-00 00:00:00') {
+      $modifiedGmt = current_time('mysql', true);
+    }
     return [
       'id'       => (int) $post->ID,
       'status'   => $post->post_status,
@@ -151,7 +158,7 @@ class Visibility_REST {
       // too so the agent + user have something they can actually open.
       'link'     => get_permalink($post),
       'editUrl'  => admin_url('post.php?post=' . $post->ID . '&action=edit'),
-      'modified' => mysql2date('c', $post->post_modified_gmt, false),
+      'modified' => mysql2date('c', $modifiedGmt, false),
     ];
   }
 }
