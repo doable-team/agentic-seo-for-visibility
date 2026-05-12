@@ -2,11 +2,13 @@
 /**
  * REST endpoints exposed BY the plugin TO Visibility's server.
  *
- * Visibility calls these to publish posts, check the plugin is alive,
- * etc. All endpoints are authenticated with the shared site token in
- * `Authorization: Bearer <token>`.
+ * Visibility calls these to list/create/update/delete posts, manage
+ * taxonomy, and upload media. All endpoints are authenticated with the
+ * shared site token in `Authorization: Bearer <token>`.
  *
- * Routes are namespaced under /wp-json/visibility/v1/* .
+ * Routes are namespaced under /wp-json/visibility/v1/* . Surface intentionally
+ * mirrors a subset of the standard WP REST API so callers map cleanly, but
+ * the auth model is the shared token — never the WP user table.
  */
 
 if (!defined('ABSPATH')) {
@@ -15,49 +17,110 @@ if (!defined('ABSPATH')) {
 
 class Visibility_REST {
 
+  /** Statuses we'll honour on create/update. Anything else falls back to "draft". */
+  const ALLOWED_STATUSES = ['draft', 'publish', 'pending', 'future', 'private'];
+
   public function __construct() {
     add_action('rest_api_init', [$this, 'register_routes']);
+    // Force no-cache headers on every response under our namespace so a
+    // page cache (LiteSpeed, WP Rocket, Cloudflare, etc.) can't serve a
+    // stale unauthenticated body to a different caller.
+    add_filter('rest_post_dispatch', [$this, 'no_cache_headers'], 10, 3);
+  }
+
+  public function no_cache_headers($response, $server, $request) {
+    if (!$response instanceof WP_REST_Response) return $response;
+    $route = $request->get_route();
+    if (strpos($route, '/visibility/v1') !== 0) return $response;
+    $response->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+    $response->header('Pragma', 'no-cache');
+    $response->header('Expires', '0');
+    return $response;
   }
 
   public function register_routes() {
+    // Health / site info
     register_rest_route('visibility/v1', '/health', [
       'methods'             => 'GET',
       'callback'            => [$this, 'health'],
       'permission_callback' => [$this, 'authenticate'],
     ]);
+
+    // Posts
     register_rest_route('visibility/v1', '/posts', [
-      'methods'             => 'POST',
-      'callback'            => [$this, 'create_post'],
-      'permission_callback' => [$this, 'authenticate'],
-    ]);
-    register_rest_route('visibility/v1', '/posts/(?P<id>\d+)', [
-      'methods'             => 'GET',
-      'callback'            => [$this, 'get_post'],
-      'permission_callback' => [$this, 'authenticate'],
-      'args'                => [
-        'id' => ['validate_callback' => fn($v) => is_numeric($v)],
+      [
+        'methods'             => 'GET',
+        'callback'            => [$this, 'list_posts'],
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+      [
+        'methods'             => 'POST',
+        'callback'            => [$this, 'create_post'],
+        'permission_callback' => [$this, 'authenticate'],
       ],
     ]);
     register_rest_route('visibility/v1', '/posts/(?P<id>\d+)', [
-      'methods'             => 'PATCH',
-      'callback'            => [$this, 'update_post'],
-      'permission_callback' => [$this, 'authenticate'],
-      'args'                => [
-        'id' => ['validate_callback' => fn($v) => is_numeric($v)],
+      [
+        'methods'             => 'GET',
+        'callback'            => [$this, 'get_post'],
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+      [
+        'methods'             => 'PATCH',
+        'callback'            => [$this, 'update_post'],
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+      [
+        'methods'             => 'DELETE',
+        'callback'            => [$this, 'delete_post'],
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+    ]);
+
+    // Categories
+    register_rest_route('visibility/v1', '/categories', [
+      [
+        'methods'             => 'GET',
+        'callback'            => $this->list_terms_factory('category'),
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+      [
+        'methods'             => 'POST',
+        'callback'            => $this->create_term_factory('category'),
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+    ]);
+
+    // Tags
+    register_rest_route('visibility/v1', '/tags', [
+      [
+        'methods'             => 'GET',
+        'callback'            => $this->list_terms_factory('post_tag'),
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+      [
+        'methods'             => 'POST',
+        'callback'            => $this->create_term_factory('post_tag'),
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+    ]);
+
+    // Media (list + upload-from-URL)
+    register_rest_route('visibility/v1', '/media', [
+      [
+        'methods'             => 'GET',
+        'callback'            => [$this, 'list_media'],
+        'permission_callback' => [$this, 'authenticate'],
+      ],
+      [
+        'methods'             => 'POST',
+        'callback'            => [$this, 'upload_media_from_url'],
+        'permission_callback' => [$this, 'authenticate'],
       ],
     ]);
   }
 
-  public function get_post(WP_REST_Request $request) {
-    $id = (int) $request['id'];
-    $post = get_post($id);
-    if (!$post) {
-      return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
-    }
-    return rest_ensure_response($this->serialize_post($post->ID));
-  }
-
-  /** Constant-time-ish comparison of the stored token with the bearer header. */
+  /** Constant-time bearer-token check against the option stored at pairing. */
   public function authenticate($request) {
     $header = $request->get_header('authorization');
     if (!$header || stripos($header, 'Bearer ') !== 0) {
@@ -71,45 +134,87 @@ class Visibility_REST {
     return true;
   }
 
+  // ── /health ─────────────────────────────────────────────────────────
+
   public function health(WP_REST_Request $request) {
+    $counts = wp_count_posts('post');
     return rest_ensure_response([
       'ok'             => true,
       'pluginVersion'  => VISIBILITY_PLUGIN_VERSION,
       'wpVersion'      => get_bloginfo('version'),
       'siteName'       => get_bloginfo('name'),
       'siteUrl'        => home_url('/'),
+      'adminUrl'       => admin_url('/'),
+      'timezone'       => wp_timezone_string(),
+      'counts'         => [
+        'published' => isset($counts->publish) ? (int) $counts->publish : 0,
+        'draft'     => isset($counts->draft) ? (int) $counts->draft : 0,
+        'pending'   => isset($counts->pending) ? (int) $counts->pending : 0,
+        'future'    => isset($counts->future) ? (int) $counts->future : 0,
+        'private'   => isset($counts->private) ? (int) $counts->private : 0,
+        'trash'     => isset($counts->trash) ? (int) $counts->trash : 0,
+      ],
     ]);
   }
 
+  // ── /posts ──────────────────────────────────────────────────────────
+
+  public function list_posts(WP_REST_Request $request) {
+    $perPage = max(1, min(100, (int) ($request->get_param('per_page') ?? 20)));
+    $page    = max(1, (int) ($request->get_param('page') ?? 1));
+    $search  = (string) ($request->get_param('search') ?? '');
+    $statusParam = $request->get_param('status');
+    $statuses = self::ALLOWED_STATUSES;
+    if (is_string($statusParam) && $statusParam !== '') {
+      $requested = array_map('sanitize_key', array_map('trim', explode(',', $statusParam)));
+      $statuses  = array_values(array_intersect(self::ALLOWED_STATUSES, $requested));
+      if (empty($statuses)) $statuses = ['publish'];
+    }
+
+    $query = new WP_Query([
+      'post_type'      => 'post',
+      'post_status'    => $statuses,
+      'posts_per_page' => $perPage,
+      'paged'          => $page,
+      's'              => $search,
+      'orderby'        => 'modified',
+      'order'          => 'DESC',
+      'no_found_rows'  => false,
+    ]);
+
+    $items = [];
+    foreach ($query->posts as $p) {
+      $items[] = $this->serialize_post_summary($p);
+    }
+
+    return rest_ensure_response([
+      'items'      => $items,
+      'page'       => $page,
+      'perPage'    => $perPage,
+      'total'      => (int) $query->found_posts,
+      'totalPages' => (int) $query->max_num_pages,
+    ]);
+  }
+
+  public function get_post(WP_REST_Request $request) {
+    $id = (int) $request['id'];
+    $post = get_post($id);
+    if (!$post) {
+      return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
+    }
+    return rest_ensure_response($this->serialize_post_full($post->ID));
+  }
+
   public function create_post(WP_REST_Request $request) {
-    $params = $request->get_json_params();
-    $title  = isset($params['title']) ? wp_kses_post((string) $params['title']) : '';
-    $body   = isset($params['content']) ? wp_kses_post((string) $params['content']) : '';
-    $status = isset($params['status']) ? sanitize_key((string) $params['status']) : 'draft';
-    $allowed_statuses = ['draft', 'publish', 'pending', 'future', 'private'];
-    if (!in_array($status, $allowed_statuses, true)) {
-      $status = 'draft';
-    }
-
-    $args = [
-      'post_title'   => $title,
-      'post_content' => $body,
-      'post_status'  => $status,
-      'post_type'    => 'post',
-    ];
-    if (!empty($params['excerpt'])) {
-      $args['post_excerpt'] = wp_kses_post((string) $params['excerpt']);
-    }
-    if (!empty($params['slug'])) {
-      $args['post_name'] = sanitize_title((string) $params['slug']);
-    }
-
+    $params = $request->get_json_params() ?: [];
+    $args = $this->build_post_args($params, ['post_status' => 'draft']);
     $post_id = wp_insert_post($args, true);
     if (is_wp_error($post_id)) {
       return $post_id;
     }
-
-    return rest_ensure_response($this->serialize_post($post_id));
+    $this->apply_term_assignments($post_id, $params);
+    $this->apply_featured_media($post_id, $params);
+    return rest_ensure_response($this->serialize_post_full($post_id));
   }
 
   public function update_post(WP_REST_Request $request) {
@@ -117,48 +222,243 @@ class Visibility_REST {
     if (!get_post($id)) {
       return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
     }
-    $params = $request->get_json_params();
-    $args   = ['ID' => $id];
+    $params = $request->get_json_params() ?: [];
+    $args   = $this->build_post_args($params, ['ID' => $id]);
+    $args['ID'] = $id;
+    $updated = wp_update_post($args, true);
+    if (is_wp_error($updated)) {
+      return $updated;
+    }
+    $this->apply_term_assignments($id, $params);
+    $this->apply_featured_media($id, $params);
+    return rest_ensure_response($this->serialize_post_full($id));
+  }
+
+  public function delete_post(WP_REST_Request $request) {
+    $id = (int) $request['id'];
+    $force = filter_var($request->get_param('force'), FILTER_VALIDATE_BOOLEAN);
+    $post = get_post($id);
+    if (!$post) {
+      return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
+    }
+    $result = wp_delete_post($id, $force);
+    if (!$result) {
+      return new WP_Error('visibility_delete_failed', __('Could not delete post.', 'visibility'), ['status' => 500]);
+    }
+    return rest_ensure_response([
+      'id'      => $id,
+      'deleted' => true,
+      'force'   => (bool) $force,
+    ]);
+  }
+
+  /** Shared arg-building helper for create + update. */
+  private function build_post_args(array $params, array $base): array {
+    $args = $base;
     if (isset($params['title']))   $args['post_title']   = wp_kses_post((string) $params['title']);
     if (isset($params['content'])) $args['post_content'] = wp_kses_post((string) $params['content']);
     if (isset($params['excerpt'])) $args['post_excerpt'] = wp_kses_post((string) $params['excerpt']);
     if (isset($params['slug']))    $args['post_name']    = sanitize_title((string) $params['slug']);
     if (isset($params['status'])) {
       $status = sanitize_key((string) $params['status']);
-      if (in_array($status, ['draft', 'publish', 'pending', 'future', 'private'], true)) {
+      if (in_array($status, self::ALLOWED_STATUSES, true)) {
         $args['post_status'] = $status;
       }
     }
-    $updated = wp_update_post($args, true);
-    if (is_wp_error($updated)) {
-      return $updated;
+    if (isset($params['date']) && is_string($params['date']) && $params['date'] !== '') {
+      $ts = strtotime($params['date']);
+      if ($ts !== false) {
+        $args['post_date_gmt'] = gmdate('Y-m-d H:i:s', $ts);
+        $args['post_date']     = get_date_from_gmt($args['post_date_gmt']);
+      }
     }
-    return rest_ensure_response($this->serialize_post($id));
+    if (!array_key_exists('post_type', $args)) {
+      $args['post_type'] = 'post';
+    }
+    return $args;
   }
 
-  private function serialize_post($post_id) {
-    $post = get_post($post_id);
-    if (!$post) {
-      return null;
+  private function apply_term_assignments($post_id, array $params): void {
+    if (isset($params['categories']) && is_array($params['categories'])) {
+      $ids = array_values(array_filter(array_map('intval', $params['categories'])));
+      wp_set_post_categories($post_id, $ids, false);
     }
-    // Fresh posts can have a zeroed post_modified_gmt before WP normalises
-    // it — guard against the "-001-11-30T00:00:00+00:00" mysql2date returns
-    // for an empty/zero input by falling back to current time.
-    $modifiedGmt = $post->post_modified_gmt;
-    if (empty($modifiedGmt) || $modifiedGmt === '0000-00-00 00:00:00') {
-      $modifiedGmt = current_time('mysql', true);
+    if (isset($params['tags']) && is_array($params['tags'])) {
+      // Accept either numeric IDs or string slugs; wp_set_post_tags handles both.
+      wp_set_post_tags($post_id, $params['tags'], false);
     }
+  }
+
+  private function apply_featured_media($post_id, array $params): void {
+    if (isset($params['featured_media']) && (int) $params['featured_media'] > 0) {
+      set_post_thumbnail($post_id, (int) $params['featured_media']);
+    }
+  }
+
+  // ── Terms (categories + tags) ──────────────────────────────────────
+
+  /** Factory: returns a closure that lists terms of the given taxonomy. */
+  public function list_terms_factory($taxonomy) {
+    return function (WP_REST_Request $request) use ($taxonomy) {
+      $perPage = max(1, min(100, (int) ($request->get_param('per_page') ?? 50)));
+      $search  = (string) ($request->get_param('search') ?? '');
+      $terms = get_terms([
+        'taxonomy'   => $taxonomy,
+        'hide_empty' => false,
+        'number'     => $perPage,
+        'search'     => $search,
+      ]);
+      if (is_wp_error($terms)) return $terms;
+      $items = array_map(fn($t) => [
+        'id'    => (int) $t->term_id,
+        'name'  => $t->name,
+        'slug'  => $t->slug,
+        'count' => (int) $t->count,
+      ], $terms);
+      return rest_ensure_response(['items' => $items]);
+    };
+  }
+
+  /** Factory: returns a closure that creates a term in the given taxonomy. */
+  public function create_term_factory($taxonomy) {
+    return function (WP_REST_Request $request) use ($taxonomy) {
+      $params = $request->get_json_params() ?: [];
+      $name   = isset($params['name']) ? sanitize_text_field((string) $params['name']) : '';
+      if ($name === '') {
+        return new WP_Error('visibility_term_no_name', __('Term name required.', 'visibility'), ['status' => 400]);
+      }
+      $args = [];
+      if (isset($params['slug']))        $args['slug']        = sanitize_title((string) $params['slug']);
+      if (isset($params['description'])) $args['description'] = wp_kses_post((string) $params['description']);
+      $created = wp_insert_term($name, $taxonomy, $args);
+      if (is_wp_error($created)) return $created;
+      $term = get_term((int) $created['term_id'], $taxonomy);
+      return rest_ensure_response([
+        'id'    => (int) $term->term_id,
+        'name'  => $term->name,
+        'slug'  => $term->slug,
+        'count' => (int) $term->count,
+      ]);
+    };
+  }
+
+  // ── Media ──────────────────────────────────────────────────────────
+
+  public function list_media(WP_REST_Request $request) {
+    $perPage = max(1, min(100, (int) ($request->get_param('per_page') ?? 20)));
+    $page    = max(1, (int) ($request->get_param('page') ?? 1));
+    $search  = (string) ($request->get_param('search') ?? '');
+    $query = new WP_Query([
+      'post_type'      => 'attachment',
+      'post_status'    => 'inherit',
+      'posts_per_page' => $perPage,
+      'paged'          => $page,
+      's'              => $search,
+      'orderby'        => 'date',
+      'order'          => 'DESC',
+    ]);
+    $items = array_map(fn($p) => $this->serialize_media($p->ID), $query->posts);
+    return rest_ensure_response([
+      'items'      => $items,
+      'page'       => $page,
+      'perPage'    => $perPage,
+      'total'      => (int) $query->found_posts,
+      'totalPages' => (int) $query->max_num_pages,
+    ]);
+  }
+
+  /** Upload from a remote URL — simpler than multipart and what most
+   *  agents already produce (images from upstream tools). */
+  public function upload_media_from_url(WP_REST_Request $request) {
+    $params = $request->get_json_params() ?: [];
+    $sourceUrl = isset($params['source_url']) ? esc_url_raw((string) $params['source_url']) : '';
+    if ($sourceUrl === '') {
+      return new WP_Error('visibility_no_url', __('source_url is required.', 'visibility'), ['status' => 400]);
+    }
+    $title = isset($params['title']) ? sanitize_text_field((string) $params['title']) : '';
+    $alt   = isset($params['alt_text']) ? sanitize_text_field((string) $params['alt_text']) : '';
+
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+
+    $tmp = download_url($sourceUrl, 30);
+    if (is_wp_error($tmp)) return $tmp;
+
+    $filename = wp_basename(parse_url($sourceUrl, PHP_URL_PATH) ?: 'upload.bin');
+    $file_array = [
+      'name'     => $filename,
+      'tmp_name' => $tmp,
+    ];
+    $attachment_id = media_handle_sideload($file_array, 0, $title);
+    if (is_wp_error($attachment_id)) {
+      @unlink($tmp);
+      return $attachment_id;
+    }
+    if ($alt !== '') {
+      update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt);
+    }
+    return rest_ensure_response($this->serialize_media($attachment_id));
+  }
+
+  // ── Serializers ────────────────────────────────────────────────────
+
+  private function serialize_post_summary($post) {
     return [
       'id'       => (int) $post->ID,
       'status'   => $post->post_status,
       'title'    => $post->post_title,
       'slug'     => $post->post_name,
-      // get_permalink returns the public URL — for drafts this 404s
-      // for anonymous visitors. Always include the wp-admin edit URL
-      // too so the agent + user have something they can actually open.
+      'excerpt'  => wp_strip_all_tags($post->post_excerpt),
       'link'     => get_permalink($post),
       'editUrl'  => admin_url('post.php?post=' . $post->ID . '&action=edit'),
-      'modified' => mysql2date('c', $modifiedGmt, false),
+      'date'     => $this->safe_iso($post->post_date_gmt),
+      'modified' => $this->safe_iso($post->post_modified_gmt),
     ];
+  }
+
+  private function serialize_post_full($post_id) {
+    $post = get_post($post_id);
+    if (!$post) return null;
+    $categories = wp_get_post_categories($post_id, ['fields' => 'all']);
+    $tags       = wp_get_post_tags($post_id);
+    $featuredId = (int) get_post_thumbnail_id($post_id);
+
+    return [
+      'id'           => (int) $post->ID,
+      'status'       => $post->post_status,
+      'title'        => $post->post_title,
+      'slug'         => $post->post_name,
+      'content'      => $post->post_content,
+      'excerpt'      => $post->post_excerpt,
+      'link'         => get_permalink($post),
+      'editUrl'      => admin_url('post.php?post=' . $post->ID . '&action=edit'),
+      'date'         => $this->safe_iso($post->post_date_gmt),
+      'modified'     => $this->safe_iso($post->post_modified_gmt),
+      'categories'   => array_map(fn($c) => ['id' => (int) $c->term_id, 'name' => $c->name, 'slug' => $c->slug], $categories),
+      'tags'         => array_map(fn($t) => ['id' => (int) $t->term_id, 'name' => $t->name, 'slug' => $t->slug], $tags),
+      'featuredMedia' => $featuredId > 0 ? $this->serialize_media($featuredId) : null,
+    ];
+  }
+
+  private function serialize_media($attachment_id) {
+    $post = get_post($attachment_id);
+    if (!$post) return null;
+    return [
+      'id'        => (int) $post->ID,
+      'title'     => $post->post_title,
+      'slug'      => $post->post_name,
+      'mimeType'  => $post->post_mime_type,
+      'url'       => wp_get_attachment_url($post->ID),
+      'altText'   => (string) get_post_meta($post->ID, '_wp_attachment_image_alt', true),
+      'date'      => $this->safe_iso($post->post_date_gmt),
+    ];
+  }
+
+  private function safe_iso($mysql_gmt) {
+    if (empty($mysql_gmt) || $mysql_gmt === '0000-00-00 00:00:00') {
+      $mysql_gmt = current_time('mysql', true);
+    }
+    return mysql2date('c', $mysql_gmt, false);
   }
 }

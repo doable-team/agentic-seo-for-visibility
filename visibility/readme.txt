@@ -4,7 +4,7 @@ Tags: seo, ai, content, agents, publishing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.3.1
+Stable tag: 0.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,6 +43,25 @@ Each WordPress site pairs with one Visibility project at a time. Disconnect and 
 In WordPress's `wp_options` table under `visibility_site_token`. Disconnecting deletes it.
 
 == Changelog ==
+
+= 0.4.0 =
+* Expanded REST surface — agents can now manage everything end-to-end through
+  the plugin instead of hitting wp-json directly:
+  - GET /posts (list with search, status filter, pagination)
+  - DELETE /posts/{id} (trash or force-delete)
+  - GET /categories + POST /categories
+  - GET /tags + POST /tags
+  - GET /media + POST /media (upload from a remote source_url)
+  - Post create/update now accept categories[], tags[], featured_media, date
+* Post responses now include categories[], tags[], featured media, full content
+  + excerpt — no need to call out to wp-json/wp/v2 for the same data.
+* /health response now includes adminUrl, timezone, and post counts (publish,
+  draft, pending, future, private, trash).
+* Security fix: explicit `Cache-Control: private, no-store, no-cache` headers
+  on every /visibility/v1/* response so page caches (LiteSpeed, WP Rocket,
+  Cloudflare, etc.) can't serve a stale unauthenticated body to a different
+  caller. Earlier versions relied on WP's default headers, which LiteSpeed
+  was overriding.
 
 = 0.3.1 =
 * Fix `modified` field returning a zero date ("-001-11-30T00:00:00+00:00")
