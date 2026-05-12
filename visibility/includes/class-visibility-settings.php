@@ -182,19 +182,60 @@ class Visibility_Settings {
             <label for="visibility_pairing_code" style="display:block;font-weight:600;margin-bottom:6px">
               <?php echo esc_html__('Pairing code', 'visibility'); ?>
             </label>
-            <input
-              type="text"
-              id="visibility_pairing_code"
-              name="visibility_pairing_code"
-              placeholder="VIS-XXXX-XX"
-              autocomplete="off"
-              autocapitalize="characters"
-              spellcheck="false"
-              class="regular-text code"
-              style="font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:0.15em;text-transform:uppercase;font-size:15px"
-              required
-            />
+            <div style="position:relative;max-width:25em">
+              <input
+                type="text"
+                id="visibility_pairing_code"
+                name="visibility_pairing_code"
+                placeholder="VIS-XXXX-XX"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                class="regular-text code"
+                style="width:100%;padding-right:38px;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:0.15em;text-transform:uppercase;font-size:15px"
+                required
+              />
+              <button
+                type="button"
+                id="visibility_paste_btn"
+                title="<?php echo esc_attr__('Paste from clipboard', 'visibility'); ?>"
+                aria-label="<?php echo esc_attr__('Paste from clipboard', 'visibility'); ?>"
+                style="position:absolute;top:50%;right:4px;transform:translateY(-50%);width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;cursor:pointer;color:#646970;border-radius:4px"
+                onmouseover="this.style.background='#f0f0f1';this.style.color='#1d2327'"
+                onmouseout="this.style.background='transparent';this.style.color='#646970'"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                </svg>
+              </button>
+            </div>
             <p class="description"><?php echo esc_html__('Codes expire after 10 minutes.', 'visibility'); ?></p>
+            <script>
+              (function () {
+                var btn = document.getElementById('visibility_paste_btn');
+                var input = document.getElementById('visibility_pairing_code');
+                if (!btn || !input) return;
+                btn.addEventListener('click', async function () {
+                  try {
+                    if (!navigator.clipboard || !navigator.clipboard.readText) {
+                      // No clipboard API — fall back to focusing the input.
+                      input.focus();
+                      return;
+                    }
+                    var text = await navigator.clipboard.readText();
+                    if (typeof text === 'string' && text.length) {
+                      input.value = text.trim().toUpperCase();
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      input.focus();
+                    }
+                  } catch (err) {
+                    // Likely a permission rejection — focus the input so the user can paste manually.
+                    input.focus();
+                  }
+                });
+              })();
+            </script>
             <p style="margin-top:20px">
               <button type="submit" class="button button-primary"><?php echo esc_html__('Connect', 'visibility'); ?></button>
             </p>

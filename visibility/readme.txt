@@ -4,7 +4,7 @@ Tags: seo, ai, content, agents, publishing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.4.1
+Stable tag: 0.4.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,6 +47,11 @@ Each WordPress site pairs with one Visibility project at a time. Disconnect and 
 In WordPress's `wp_options` table under `visibility_site_token`. Disconnecting deletes it.
 
 == Changelog ==
+
+= 0.4.2 =
+* Inline paste button in the pairing-code input — one click pulls the code
+  from your clipboard so you don't have to right-click → paste. Falls back
+  to focusing the input when the browser blocks clipboard reads.
 
 = 0.4.1 =
 * Disconnect now actually disconnects on both sides. The Disconnect button
