@@ -31,6 +31,14 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
     register_rest_route('visibility/v1', '/posts/(?P<id>\d+)', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'get_post'],
+      'permission_callback' => [$this, 'authenticate'],
+      'args'                => [
+        'id' => ['validate_callback' => fn($v) => is_numeric($v)],
+      ],
+    ]);
+    register_rest_route('visibility/v1', '/posts/(?P<id>\d+)', [
       'methods'             => 'PATCH',
       'callback'            => [$this, 'update_post'],
       'permission_callback' => [$this, 'authenticate'],
@@ -38,6 +46,15 @@ class Visibility_REST {
         'id' => ['validate_callback' => fn($v) => is_numeric($v)],
       ],
     ]);
+  }
+
+  public function get_post(WP_REST_Request $request) {
+    $id = (int) $request['id'];
+    $post = get_post($id);
+    if (!$post) {
+      return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
+    }
+    return rest_ensure_response($this->serialize_post($post->ID));
   }
 
   /** Constant-time-ish comparison of the stored token with the bearer header. */
@@ -129,7 +146,11 @@ class Visibility_REST {
       'status'   => $post->post_status,
       'title'    => $post->post_title,
       'slug'     => $post->post_name,
+      // get_permalink returns the public URL — for drafts this 404s
+      // for anonymous visitors. Always include the wp-admin edit URL
+      // too so the agent + user have something they can actually open.
       'link'     => get_permalink($post),
+      'editUrl'  => admin_url('post.php?post=' . $post->ID . '&action=edit'),
       'modified' => mysql2date('c', $post->post_modified_gmt, false),
     ];
   }

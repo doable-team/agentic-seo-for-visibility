@@ -3,10 +3,13 @@
  * Talks to the Visibility backend.
  *
  * Storage:
- *   visibility_site_token  — long-lived shared secret returned from /pair
- *   visibility_project_id  — project this site is paired to
- *   visibility_company_id  — company that owns the project
- *   visibility_paired_at   — unix timestamp of pairing
+ *   visibility_site_token   — long-lived shared secret returned from /pair
+ *   visibility_project_id   — project this site is paired to
+ *   visibility_project_name — human-readable project name (refreshed on heartbeat)
+ *   visibility_company_id   — company that owns the project
+ *   visibility_company_name — human-readable company name (refreshed on heartbeat)
+ *   visibility_paired_at    — unix timestamp of pairing
+ *   visibility_last_seen_at — unix timestamp of the last successful heartbeat
  */
 
 if (!defined('ABSPATH')) {
@@ -56,12 +59,17 @@ class Visibility_Client {
 
     update_option('visibility_site_token', $body['siteToken'], false);
     update_option('visibility_project_id', $body['projectId'], false);
+    update_option('visibility_project_name', isset($body['projectName']) ? (string) $body['projectName'] : '', false);
     update_option('visibility_company_id', $body['companyId'] ?? '', false);
+    update_option('visibility_company_name', isset($body['companyName']) ? (string) $body['companyName'] : '', false);
     update_option('visibility_paired_at', time(), false);
+    update_option('visibility_last_seen_at', time(), false);
 
     return [
-      'projectId' => $body['projectId'],
-      'companyId' => $body['companyId'] ?? null,
+      'projectId'   => $body['projectId'],
+      'projectName' => $body['projectName'] ?? null,
+      'companyId'   => $body['companyId'] ?? null,
+      'companyName' => $body['companyName'] ?? null,
     ];
   }
 
@@ -70,8 +78,11 @@ class Visibility_Client {
   public static function disconnect() {
     delete_option('visibility_site_token');
     delete_option('visibility_project_id');
+    delete_option('visibility_project_name');
     delete_option('visibility_company_id');
+    delete_option('visibility_company_name');
     delete_option('visibility_paired_at');
+    delete_option('visibility_last_seen_at');
   }
 
   public static function is_paired() {
@@ -84,12 +95,14 @@ class Visibility_Client {
   }
 
   /** Daily ping so Visibility can show "last seen" + the installed
-   *  plugin version. Silently no-ops when the plugin isn't paired. */
+   *  plugin version. Also refreshes the cached company + project
+   *  names so the settings page stays in sync with renames upstream.
+   *  Silently no-ops when the plugin isn't paired. */
   public static function heartbeat() {
     if (!self::is_paired()) {
       return;
     }
-    wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/heartbeat', [
+    $resp = wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/heartbeat', [
       'timeout' => 10,
       'headers' => [
         'Authorization' => 'Bearer ' . self::site_token(),
@@ -100,7 +113,24 @@ class Visibility_Client {
       'body' => wp_json_encode([
         'pluginVersion' => VISIBILITY_PLUGIN_VERSION,
       ]),
-      'blocking' => false,
     ]);
+    if (is_wp_error($resp)) {
+      return;
+    }
+    $status = wp_remote_retrieve_response_code($resp);
+    if ($status < 200 || $status >= 300) {
+      return;
+    }
+    $body = json_decode(wp_remote_retrieve_body($resp), true);
+    if (!is_array($body)) {
+      return;
+    }
+    if (isset($body['projectName'])) {
+      update_option('visibility_project_name', (string) $body['projectName'], false);
+    }
+    if (isset($body['companyName'])) {
+      update_option('visibility_company_name', (string) $body['companyName'], false);
+    }
+    update_option('visibility_last_seen_at', time(), false);
   }
 }

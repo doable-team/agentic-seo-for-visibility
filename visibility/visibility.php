@@ -3,7 +3,7 @@
  * Plugin Name: Visibility
  * Plugin URI: https://app.visibility.so
  * Description: Connect your WordPress site to Visibility so your agents can audit and publish content directly. Pair once with a short code — no app passwords required.
- * Version: 0.1.0
+ * Version: 0.3.0
  * Author: Visibility Team
  * Author URI: https://app.visibility.so
  * License: GPL v2 or later
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
   exit;
 }
 
-define('VISIBILITY_PLUGIN_VERSION', '0.1.0');
+define('VISIBILITY_PLUGIN_VERSION', '0.3.0');
 define('VISIBILITY_PLUGIN_FILE', __FILE__);
 define('VISIBILITY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 

@@ -71,9 +71,12 @@ class Visibility_Settings {
       return;
     }
 
-    $paired      = Visibility_Client::is_paired();
-    $project_id  = get_option('visibility_project_id', '');
-    $paired_at   = (int) get_option('visibility_paired_at', 0);
+    $paired       = Visibility_Client::is_paired();
+    $project_id   = get_option('visibility_project_id', '');
+    $project_name = get_option('visibility_project_name', '');
+    $company_name = get_option('visibility_company_name', '');
+    $paired_at    = (int) get_option('visibility_paired_at', 0);
+    $last_seen_at = (int) get_option('visibility_last_seen_at', 0);
     $status      = isset($_GET['visibility_status']) ? sanitize_key((string) $_GET['visibility_status']) : '';
     $error_msg   = isset($_GET['visibility_msg']) ? sanitize_text_field((string) wp_unslash($_GET['visibility_msg'])) : '';
     $action_url  = esc_url(admin_url('admin-post.php'));
@@ -101,12 +104,33 @@ class Visibility_Settings {
           </h2>
           <table class="form-table" role="presentation">
             <tr>
+              <th scope="row"><?php echo esc_html__('Company', 'visibility'); ?></th>
+              <td>
+                <?php if ($company_name !== '') : ?>
+                  <strong><?php echo esc_html($company_name); ?></strong>
+                <?php else : ?>
+                  <em style="color:#646970"><?php echo esc_html__('—', 'visibility'); ?></em>
+                <?php endif; ?>
+              </td>
+            </tr>
+            <tr>
               <th scope="row"><?php echo esc_html__('Project', 'visibility'); ?></th>
-              <td><code><?php echo esc_html($project_id); ?></code></td>
+              <td>
+                <?php if ($project_name !== '') : ?>
+                  <strong><?php echo esc_html($project_name); ?></strong>
+                  <br/><span style="color:#646970;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace"><?php echo esc_html($project_id); ?></span>
+                <?php else : ?>
+                  <code><?php echo esc_html($project_id); ?></code>
+                <?php endif; ?>
+              </td>
             </tr>
             <tr>
               <th scope="row"><?php echo esc_html__('Paired at', 'visibility'); ?></th>
               <td><?php echo $paired_at ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $paired_at)) : '—'; ?></td>
+            </tr>
+            <tr>
+              <th scope="row"><?php echo esc_html__('Last seen', 'visibility'); ?></th>
+              <td><?php echo $last_seen_at ? esc_html(human_time_diff($last_seen_at, time())) . ' ' . esc_html__('ago', 'visibility') : esc_html__('Never', 'visibility'); ?></td>
             </tr>
             <tr>
               <th scope="row"><?php echo esc_html__('Plugin version', 'visibility'); ?></th>

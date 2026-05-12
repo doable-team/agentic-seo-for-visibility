@@ -4,7 +4,7 @@ Tags: seo, ai, content, agents, publishing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.1.0
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,6 +43,19 @@ Each WordPress site pairs with one Visibility project at a time. Disconnect and 
 In WordPress's `wp_options` table under `visibility_site_token`. Disconnecting deletes it.
 
 == Changelog ==
+
+= 0.3.0 =
+* Settings page now shows the connected company and project names (not just
+  the UUID). Names are returned from the pair endpoint and refreshed on each
+  daily heartbeat, so renames in Visibility surface here automatically.
+* New "Last seen" row showing when the daily heartbeat last reached Visibility.
+
+= 0.2.0 =
+* Settings page links to root of Visibility instead of /integrations.
+* Plugin REST: added GET /wp-json/visibility/v1/posts/{id} for verification.
+* Post create/update responses now include `editUrl` (wp-admin link) so the
+  agent + user have something they can open even when the post is a draft
+  (drafts return 404 to anonymous visitors, which is normal WP behaviour).
 
 = 0.1.0 =
 * Initial release: pairing flow, REST endpoints for post create/update.
