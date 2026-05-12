@@ -77,7 +77,7 @@ class Visibility_Settings {
     $status      = isset($_GET['visibility_status']) ? sanitize_key((string) $_GET['visibility_status']) : '';
     $error_msg   = isset($_GET['visibility_msg']) ? sanitize_text_field((string) wp_unslash($_GET['visibility_msg'])) : '';
     $action_url  = esc_url(admin_url('admin-post.php'));
-    $dashboard   = esc_url(trailingslashit(visibility_api_base_url()) . 'integrations');
+    $dashboard   = esc_url(trailingslashit(visibility_api_base_url()));
     ?>
     <div class="wrap" style="max-width:640px">
       <h1><?php echo esc_html__('Visibility', 'visibility'); ?></h1>
