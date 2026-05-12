@@ -1,0 +1,9 @@
+# Files/folders to exclude when packaging the plugin for distribution.
+# Anything listed here is NOT part of the .zip uploaded to wordpress.org.
+
+.git
+.gitignore
+.distignore
+README.md
+assets/banner.svg
+*.zip

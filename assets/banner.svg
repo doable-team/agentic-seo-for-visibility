@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1544" height="500" viewBox="0 0 1544 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0E0D0C"/>
+      <stop offset="1" stop-color="#1A1918"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.18" cy="0.5" r="0.4">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1544" height="500" fill="url(#bg)"/>
+  <rect width="1544" height="500" fill="url(#glow)"/>
+
+  <!-- Sonar mark on the left, vertically centred -->
+  <g transform="translate(110, 60) scale(0.56)">
+    <circle cx="336" cy="336" r="27.105882352941176" fill="#FFFFFF"/>
+    <circle cx="336" cy="336" r="67.76470588235294" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="289.52917895483534 425.77820434534607" stroke-dashoffset="-68.12451269525538"/>
+    <circle cx="336" cy="336" r="120.47058823529412" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="514.7185403641517 756.9390299472819" stroke-dashoffset="-121.11024479156512"/>
+    <circle cx="336" cy="336" r="173.1764705882353" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="739.9079017734681 1088.0998555492176" stroke-dashoffset="-174.09597688787485"/>
+    <circle cx="336" cy="336" r="225.88235294117646" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="965.0972631827843 1419.2606811511534" stroke-dashoffset="-227.08170898418456"/>
+  </g>
+
+  <!-- Wordmark + tagline -->
+  <g font-family="-apple-system, 'Segoe UI', Roboto, system-ui, sans-serif">
+    <text x="540" y="225" fill="#FFFFFF" font-size="76" font-weight="600" letter-spacing="-1.5">visibility.so</text>
+    <text x="540" y="295" fill="#A09D96" font-size="32" font-weight="400" letter-spacing="0.2">Agentic SEO + content publishing for WordPress</text>
+    <text x="540" y="365" fill="#6B6862" font-size="22" font-weight="400" letter-spacing="0.4">Pair once with a short code. No app passwords. No service accounts.</text>
+  </g>
+</svg>

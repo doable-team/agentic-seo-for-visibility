@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="672" height="672" viewBox="0 0 672 672">
+  <rect width="672" height="672" fill="#1A1918"/>
+  <circle cx="336" cy="336" r="27.105882352941176" fill="#FFFFFF"/>
+  <circle cx="336" cy="336" r="67.76470588235294" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="289.52917895483534 425.77820434534607" stroke-dashoffset="-68.12451269525538"/>
+  <circle cx="336" cy="336" r="120.47058823529412" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="514.7185403641517 756.9390299472819" stroke-dashoffset="-121.11024479156512"/>
+  <circle cx="336" cy="336" r="173.1764705882353" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="739.9079017734681 1088.0998555492176" stroke-dashoffset="-174.09597688787485"/>
+  <circle cx="336" cy="336" r="225.88235294117646" fill="none" stroke="#FFFFFF" stroke-width="27.105882352941176" stroke-linecap="round" stroke-dasharray="965.0972631827843 1419.2606811511534" stroke-dashoffset="-227.08170898418456"/>
+</svg>

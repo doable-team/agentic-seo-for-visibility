@@ -28,6 +28,10 @@ You can disconnect anytime from Settings → Visibility (or from the Visibility 
 2. Activate the plugin through the **Plugins** menu.
 3. Go to **Settings → Visibility** and follow the pairing instructions.
 
+== Screenshots ==
+
+1. Settings → Visibility, paired state, showing the connected company + project, last-seen heartbeat, and plugin version.
+
 == Frequently Asked Questions ==
 
 = Do I need to create an Application Password? =

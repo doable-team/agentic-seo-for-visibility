@@ -81,9 +81,13 @@ class Visibility_Settings {
     $error_msg   = isset($_GET['visibility_msg']) ? sanitize_text_field((string) wp_unslash($_GET['visibility_msg'])) : '';
     $action_url  = esc_url(admin_url('admin-post.php'));
     $dashboard   = esc_url(trailingslashit(visibility_api_base_url()));
+    $logo_url    = esc_url(plugins_url('assets/icon.svg', VISIBILITY_PLUGIN_FILE));
     ?>
     <div class="wrap" style="max-width:640px">
-      <h1><?php echo esc_html__('Visibility', 'visibility'); ?></h1>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+        <img src="<?php echo $logo_url; ?>" alt="" width="42" height="42" style="display:block;border-radius:10px"/>
+        <h1 style="margin:0;line-height:1.2"><?php echo esc_html__('Visibility', 'visibility'); ?></h1>
+      </div>
       <p class="description" style="margin-bottom:24px">
         <?php echo esc_html__('Connect this WordPress site to your Visibility project so your agents can publish here.', 'visibility'); ?>
       </p>
