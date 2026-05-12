@@ -4,7 +4,7 @@ Tags: seo, ai, content, agents, publishing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.4.0
+Stable tag: 0.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,6 +47,15 @@ Each WordPress site pairs with one Visibility project at a time. Disconnect and 
 In WordPress's `wp_options` table under `visibility_site_token`. Disconnecting deletes it.
 
 == Changelog ==
+
+= 0.4.1 =
+* Disconnect now actually disconnects on both sides. The Disconnect button
+  on Settings → Visibility used to wipe the local options only, leaving the
+  Visibility project still marked "Connected via plugin" until the next
+  failed publish reverified it. The plugin now calls a new server endpoint
+  (POST /api/wordpress/plugin/disconnect) before wiping local state, so
+  Visibility removes the project's site row immediately. Local teardown
+  still completes even if Visibility is unreachable.
 
 = 0.4.0 =
 * Expanded REST surface — agents can now manage everything end-to-end through

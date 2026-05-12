@@ -73,9 +73,33 @@ class Visibility_Client {
     ];
   }
 
-  /** Forget the current pairing. The server-side site row is unaffected
-   *  — operator should also disconnect from the Visibility dashboard. */
+  /** Forget the current pairing.
+   *
+   *  We notify Visibility's server first (so it removes the project's
+   *  site row and stops dispatching to us) and then wipe local options.
+   *  The server call is best-effort: even if Visibility is unreachable
+   *  the local teardown still completes — the user can always re-pair
+   *  later, and a stale row on the server gets cleaned up the next
+   *  time they pair (which replaces the existing row). */
   public static function disconnect() {
+    $token = self::site_token();
+    if ($token !== '') {
+      wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/disconnect', [
+        'timeout' => 10,
+        'headers' => [
+          'Authorization' => 'Bearer ' . $token,
+          'Content-Type'  => 'application/json',
+          'Accept'        => 'application/json',
+          'User-Agent'    => 'Visibility-WP-Plugin/' . VISIBILITY_PLUGIN_VERSION,
+        ],
+        'body' => wp_json_encode([
+          'pluginVersion' => VISIBILITY_PLUGIN_VERSION,
+        ]),
+        // Block briefly so the user sees an immediate "Disconnected"
+        // confirmation, but never let server downtime stop the local
+        // disconnect — any non-2xx is treated as success here.
+      ]);
+    }
     delete_option('visibility_site_token');
     delete_option('visibility_project_id');
     delete_option('visibility_project_name');
