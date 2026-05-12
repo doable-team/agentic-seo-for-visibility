@@ -4,7 +4,7 @@ Tags: seo, ai, content, agents, publishing
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.4.2
+Stable tag: 0.4.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,6 +47,13 @@ Each WordPress site pairs with one Visibility project at a time. Disconnect and 
 In WordPress's `wp_options` table under `visibility_site_token`. Disconnecting deletes it.
 
 == Changelog ==
+
+= 0.4.3 =
+* Icon polish — the bundled brand icon (Settings → Visibility, and the
+  wp.org listing assets) now uses a shifted viewBox so the sonar C-shape
+  sits visually centred in the square canvas. Previous renders looked
+  like the icon was cropped on the right because the dot was at the
+  geometric centre but the C's visual mass extends only leftward.
 
 = 0.4.2 =
 * Inline paste button in the pairing-code input — one click pulls the code
