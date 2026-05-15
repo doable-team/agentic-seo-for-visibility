@@ -1,28 +1,35 @@
 === Agentic SEO for Visibility ===
 Contributors: rankth
-Tags: seo, ai, content, agents, publishing
+Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.6.1
+Stable tag: 0.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Connect WordPress to the Visibility service (https://app.visibility.so) so SEO agents in your Visibility project can publish content directly. Pair with a code — no Application Passwords required.
+Pair WordPress with your Visibility project so AI agents can audit and publish content directly. No Application Passwords required.
 
 == Description ==
 
-Visibility (https://app.visibility.so) is a SaaS service that runs AI agents to audit websites and ship SEO-optimised content. This plugin is published by the team behind Visibility and connects your WordPress install to your Visibility project so the agents can publish drafts and updates straight to wp-admin — no Application Passwords, no copy-pasting.
+**Agentic SEO for Visibility** is the official WordPress plugin for [Visibility](https://app.visibility.so), a SaaS platform that runs AI agents to audit websites, generate SEO-optimised content, and publish it directly to WordPress. Pair your site with your Visibility project in under a minute using a short code — no Application Passwords, no per-user API keys, and no copy-pasting drafts out of an AI tool.
 
-How it works:
+= Why use this plugin =
 
-1. In your Visibility project, click **Connect via plugin** and copy the short code (e.g. VIS-A7K9-XB).
-2. Install + activate this plugin, open **Settings → Agentic SEO**, and paste the code.
-3. That's it. Your project and this site are paired; the agents can now publish here.
+* **No Application Password required.** Pairing exchanges a one-time short code for a shared site token, so the plugin and Visibility can talk without a WordPress user password ever leaving your site.
+* **Built for agentic SEO workflows.** Visibility's AI agents can list, draft, update, schedule, and publish posts on your behalf — including categories, tags, featured images, and excerpts.
+* **Drafts by default; publishes only when you allow it.** Every post is saved as a WordPress draft unless you've enabled "Allow publishing" on the agent in your Visibility project, so a human can always review AI-written content before it goes live.
+* **Compatible with Yoast SEO, Rank Math, and AIOSEO.** Posts go through the standard WordPress post-save flow, so SEO-plugin meta boxes, schema generation, and sitemap entries populate the same way they do for posts you write by hand.
+* **Works on any WordPress 6.0+ install.** No special PHP extensions, no server tweaks, no host control-panel toggles to flip.
+* **Open source (GPLv2).** Plugin source lives at [github.com/doable-team/agentic-seo-for-visibility](https://github.com/doable-team/agentic-seo-for-visibility).
 
-You can disconnect anytime from Settings → Agentic SEO (or from the Visibility dashboard).
+= How it works =
 
-A Visibility account is required to use this plugin. See the **External services** section below for details on the network calls the plugin makes.
+1. In your Visibility project, click **Connect via plugin** and copy the short pairing code (for example `VIS-A7K9-XB`).
+2. Install and activate this plugin, then open **Settings → Agentic SEO** and paste the code.
+3. Your project and this site are paired. AI agents can now read, draft, and (when enabled) publish WordPress content here.
+
+You can disconnect at any time from Settings → Agentic SEO, or from the Visibility dashboard. A Visibility account at [app.visibility.so](https://app.visibility.so) is required. See the **External services** section below for the full list of network calls this plugin makes.
 
 == Installation ==
 
@@ -38,15 +45,51 @@ A Visibility account is required to use this plugin. See the **External services
 
 = Do I need to create an Application Password? =
 
-No. The plugin uses a shared token issued during pairing.
+No. Pairing produces a shared site token that the plugin uses — no WordPress user password is involved at any point, and you don't need to enable Application Passwords in your WP user profile.
 
-= Can I use this with multiple Visibility projects? =
+= Can AI agents publish to WordPress automatically through this plugin? =
 
-Each WordPress site pairs with one Visibility project at a time. Disconnect and re-pair if you need to move it.
+Yes, when you allow it. Each Visibility agent has an "Allow publishing" toggle in the Visibility dashboard. With it on, the agent publishes posts directly. With it off (the default), every save is forced to draft so a human reviews and publishes manually.
 
-= Where is the token stored? =
+= Can I keep AI content in draft-only mode? =
 
-In WordPress's `wp_options` table under `visibility_site_token`. Disconnecting deletes it.
+Yes — that's the default behaviour. Without the "Allow publishing" toggle, every post the AI agent creates or updates is saved as a WordPress draft. You publish manually from wp-admin when you're satisfied with the content.
+
+= What can a Visibility AI agent do on my WordPress site? =
+
+Through the plugin's REST surface (`/wp-json/visibility/v1/*`), AI agents can list, create, update, and delete posts; manage categories and tags; upload media and set featured images; and read site health info (post counts, WP version, timezone). Nothing outside that — no theme files, no user accounts, no general WordPress settings.
+
+= Will this AI content plugin slow down my WordPress site? =
+
+No. The plugin adds a small set of authenticated REST endpoints that only respond when called by Visibility, plus one cron heartbeat that runs once a day. There's no extra JavaScript or CSS on the public side of your site and no background polling.
+
+= Is this compatible with Yoast SEO, Rank Math, AIOSEO, or other SEO plugins? =
+
+Yes. Posts created by AI agents go through WordPress's standard post-save flow, so SEO-plugin meta boxes, structured-data / schema generation, and XML sitemap entries populate the same way they do for posts you write by hand. You can configure agents on the Visibility side to populate Yoast / Rank Math / AIOSEO fields directly via post meta.
+
+= Does this work with WordPress multisite? =
+
+Yes. Each subsite pairs independently with its own Visibility project. Network-activate the plugin or activate it per subsite; the pairing flow runs at the subsite level.
+
+= Can I use the same WordPress site with multiple Visibility projects? =
+
+Each WordPress site pairs with one Visibility project at a time. Disconnect from Settings → Agentic SEO and re-pair when you need to move the site to a different project.
+
+= What happens if the pairing code expires before I paste it? =
+
+Pairing codes are valid for 10 minutes and are single-use. If yours times out, click **Generate a new code** in your Visibility project to mint another one — there's no penalty and the old code is discarded automatically.
+
+= What data does this plugin send to Visibility? =
+
+On pairing and once a day for heartbeats, the plugin sends your site URL, site name, WordPress version, and the installed plugin version. Post content only travels when one of your AI agents creates or updates a post in WordPress — and that always originates from a Visibility project you control. See the **External services** section below for the precise endpoint list.
+
+= How do I uninstall this AI publishing plugin? =
+
+Deactivate it from the Plugins screen, then delete. On deactivation the daily heartbeat cron is unscheduled; on delete the pairing token (`visibility_site_token`) and cached company / project names are removed from `wp_options`. Your data in your Visibility project is untouched — disconnect from this plugin **before** deleting if you also want Visibility to forget about this site.
+
+= What WordPress and PHP versions does it require? =
+
+WordPress 6.0 or newer and PHP 7.4 or newer. Tested up to WordPress 6.9.
 
 == External services ==
 
@@ -64,6 +107,17 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.6.2 =
+* Trim the short description from 196 to 131 characters so the WordPress.org
+  Plugin Checker stops flagging it for truncation in plugin-directory cards.
+* Rewrite the long description for clarity, with a "Why use this plugin"
+  bullet list and a tighter "How it works" sequence.
+* Expand the FAQ from 3 to 12 entries answering the most common questions
+  about AI publishing workflows, draft-only mode, SEO-plugin compatibility,
+  performance, multisite, privacy, and uninstall behaviour.
+* Refresh the `Tags` line with more specific search terms
+  (`agentic seo`, `ai content`, `ai writer`, `content automation`, `seo`).
 
 = 0.6.1 =
 * Security & WP-coding-standards pass on the settings page and REST handler
