@@ -3,9 +3,9 @@
  * Plugin Name: Agentic SEO for Visibility
  * Plugin URI: https://app.visibility.so
  * Description: Connect your WordPress site to the Visibility service at https://app.visibility.so so AI agents in your Visibility project can audit and publish content directly. Pair once with a short code — no Application Passwords required. Published by the team behind Visibility (visibility.so).
- * Version: 0.6.2
+ * Version: 0.6.3
  * Author: rankth
- * Author URI: https://app.visibility.so
+ * Author URI: https://visibility.so
  * License: GPL v2 or later
  * Text Domain: agentic-seo-for-visibility
  * Requires at least: 6.0
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
   exit;
 }
 
-define('VISIBILITY_PLUGIN_VERSION', '0.6.2');
+define('VISIBILITY_PLUGIN_VERSION', '0.6.3');
 define('VISIBILITY_PLUGIN_FILE', __FILE__);
 define('VISIBILITY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 

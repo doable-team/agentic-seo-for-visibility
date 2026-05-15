@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.6.2
+Stable tag: 0.6.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,14 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.6.3 =
+* Split the `Plugin URI` and `Author URI` headers — they were both
+  pointing at `https://app.visibility.so` which the WordPress.org
+  Plugin Checker flags (the two URIs must describe different things:
+  the plugin product vs. the publisher). Plugin URI stays at the
+  product page; Author URI now points at the publisher site at
+  `https://visibility.so`.
 
 = 0.6.2 =
 * Trim the short description from 196 to 131 characters so the WordPress.org
