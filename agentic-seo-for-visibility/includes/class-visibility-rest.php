@@ -385,14 +385,15 @@ class Visibility_REST {
     $tmp = download_url($sourceUrl, 30);
     if (is_wp_error($tmp)) return $tmp;
 
-    $filename = wp_basename(parse_url($sourceUrl, PHP_URL_PATH) ?: 'upload.bin');
+    $parsed_url = wp_parse_url($sourceUrl);
+    $filename = wp_basename($parsed_url['path'] ?? 'upload.bin');
     $file_array = [
       'name'     => $filename,
       'tmp_name' => $tmp,
     ];
     $attachment_id = media_handle_sideload($file_array, 0, $title);
     if (is_wp_error($attachment_id)) {
-      @unlink($tmp);
+      wp_delete_file($tmp);
       return $attachment_id;
     }
     if ($alt !== '') {

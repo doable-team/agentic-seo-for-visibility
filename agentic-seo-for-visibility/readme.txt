@@ -2,9 +2,9 @@
 Contributors: rankth
 Tags: seo, ai, content, agents, publishing
 Requires at least: 6.0
-Tested up to: 6.7
+Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.6.0
+Stable tag: 0.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,22 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.6.1 =
+* Security & WP-coding-standards pass on the settings page and REST handler
+  ahead of the WordPress.org re-review:
+  * Status-redirect query args (`?visibility_status=...&visibility_msg=...`)
+    are now nonce-protected, so a crafted URL can no longer inject a spoofed
+    admin notice into the Settings page.
+  * `wp_die(__(...))` upgraded to `wp_die(esc_html__(...))` on the
+    permission-denied paths.
+  * URL output in the settings template now escapes at echo time with
+    `esc_url()` (variables were already escape-on-assign — this is the
+    belt-and-braces "escape late" pattern WP coding standards prefer).
+  * Media-upload route: `parse_url()` → `wp_parse_url()` and
+    `@unlink($tmp)` → `wp_delete_file($tmp)` (use the WordPress wrappers
+    so filter hooks run and the filesystem op doesn't silent-fail).
+* `readme.txt` `Tested up to: 6.9`.
 
 = 0.6.0 =
 * Rebrand to **Agentic SEO for Visibility** — display name, slug

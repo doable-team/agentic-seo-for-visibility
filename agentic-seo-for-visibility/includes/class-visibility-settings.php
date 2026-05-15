@@ -1,10 +1,15 @@
 <?php
 /**
- * Settings page under Settings → Visibility.
+ * Settings page under Settings -> Agentic SEO.
  *
  * Two states:
  *   - Not paired: shows a single field to paste the pairing code.
  *   - Paired:     shows status + a Disconnect button.
+ *
+ * Status-redirect query args are nonce-protected so an attacker can't
+ * craft `?visibility_status=error&visibility_msg=<phishing-text>` and
+ * inject an arbitrary admin notice by tricking the user into clicking
+ * a link. The nonce is minted at redirect time and verified on render.
  */
 
 if (!defined('ABSPATH')) {
@@ -19,6 +24,41 @@ class Visibility_Settings {
     add_action('admin_post_visibility_disconnect', [$this, 'handle_disconnect']);
   }
 
+  /** Build the nonce-protected query args for a redirect-after-action.
+   *  $message is optional and only attached on the error path. */
+  private function get_notice_query_args($status, $message = '') {
+    $args = [
+      'page'                    => 'visibility',
+      'visibility_status'       => $status,
+      'visibility_notice_nonce' => wp_create_nonce('visibility_notice'),
+    ];
+
+    if ($message !== '') {
+      $args['visibility_msg'] = rawurlencode($message);
+    }
+
+    return $args;
+  }
+
+  /** Read the (nonce-verified) status + message from the current request.
+   *  Returns empty strings when no nonce is present or it doesn't verify —
+   *  silently ignoring spoofed notice URLs. */
+  private function get_notice_state() {
+    $notice_nonce = isset($_GET['visibility_notice_nonce']) ? sanitize_text_field(wp_unslash($_GET['visibility_notice_nonce'])) : '';
+
+    if ($notice_nonce === '' || !wp_verify_nonce($notice_nonce, 'visibility_notice')) {
+      return [
+        'status'    => '',
+        'error_msg' => '',
+      ];
+    }
+
+    return [
+      'status'    => isset($_GET['visibility_status']) ? sanitize_key(wp_unslash($_GET['visibility_status'])) : '',
+      'error_msg' => isset($_GET['visibility_msg']) ? sanitize_text_field(wp_unslash($_GET['visibility_msg'])) : '',
+    ];
+  }
+
   public function register_menu() {
     add_options_page(
       __('Agentic SEO for Visibility', 'agentic-seo-for-visibility'),
@@ -31,7 +71,7 @@ class Visibility_Settings {
 
   public function handle_pair() {
     if (!current_user_can('manage_options')) {
-      wp_die(__('Permission denied.', 'agentic-seo-for-visibility'));
+      wp_die(esc_html__('Permission denied.', 'agentic-seo-for-visibility'));
     }
     check_admin_referer('visibility_pair');
     $code = isset($_POST['visibility_pairing_code']) ? sanitize_text_field(wp_unslash($_POST['visibility_pairing_code'])) : '';
@@ -39,30 +79,20 @@ class Visibility_Settings {
 
     if (is_wp_error($result)) {
       $message = $result->get_error_message();
-      wp_safe_redirect(add_query_arg([
-        'page'              => 'visibility',
-        'visibility_status' => 'error',
-        'visibility_msg'    => rawurlencode($message),
-      ], admin_url('options-general.php')));
+      wp_safe_redirect(add_query_arg($this->get_notice_query_args('error', $message), admin_url('options-general.php')));
       exit;
     }
-    wp_safe_redirect(add_query_arg([
-      'page'              => 'visibility',
-      'visibility_status' => 'paired',
-    ], admin_url('options-general.php')));
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args('paired'), admin_url('options-general.php')));
     exit;
   }
 
   public function handle_disconnect() {
     if (!current_user_can('manage_options')) {
-      wp_die(__('Permission denied.', 'agentic-seo-for-visibility'));
+      wp_die(esc_html__('Permission denied.', 'agentic-seo-for-visibility'));
     }
     check_admin_referer('visibility_disconnect');
     Visibility_Client::disconnect();
-    wp_safe_redirect(add_query_arg([
-      'page'              => 'visibility',
-      'visibility_status' => 'disconnected',
-    ], admin_url('options-general.php')));
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args('disconnected'), admin_url('options-general.php')));
     exit;
   }
 
@@ -77,15 +107,16 @@ class Visibility_Settings {
     $company_name = get_option('visibility_company_name', '');
     $paired_at    = (int) get_option('visibility_paired_at', 0);
     $last_seen_at = (int) get_option('visibility_last_seen_at', 0);
-    $status      = isset($_GET['visibility_status']) ? sanitize_key((string) $_GET['visibility_status']) : '';
-    $error_msg   = isset($_GET['visibility_msg']) ? sanitize_text_field((string) wp_unslash($_GET['visibility_msg'])) : '';
+    $notice_data  = $this->get_notice_state();
+    $status      = $notice_data['status'];
+    $error_msg   = $notice_data['error_msg'];
     $action_url  = esc_url(admin_url('admin-post.php'));
     $dashboard   = esc_url(trailingslashit(visibility_api_base_url()));
     $logo_url    = esc_url(plugins_url('assets/icon.svg', VISIBILITY_PLUGIN_FILE));
     ?>
     <div class="wrap" style="max-width:640px">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
-        <img src="<?php echo $logo_url; ?>" alt="" width="42" height="42" style="display:block;border-radius:10px"/>
+        <img src="<?php echo esc_url($logo_url); ?>" alt="" width="42" height="42" style="display:block;border-radius:10px"/>
         <h1 style="margin:0;line-height:1.2"><?php echo esc_html__('Agentic SEO for Visibility', 'agentic-seo-for-visibility'); ?></h1>
       </div>
       <p class="description" style="margin-bottom:24px">
@@ -143,13 +174,13 @@ class Visibility_Settings {
           </table>
 
           <p style="margin-top:24px">
-            <a href="<?php echo $dashboard; ?>" target="_blank" rel="noopener" class="button button-primary">
+            <a href="<?php echo esc_url($dashboard); ?>" target="_blank" rel="noopener" class="button button-primary">
               <?php echo esc_html__('Open Visibility dashboard', 'agentic-seo-for-visibility'); ?>
             </a>
           </p>
 
           <hr style="margin:28px 0" />
-          <form method="post" action="<?php echo $action_url; ?>" onsubmit="return confirm('<?php echo esc_js(__('Disconnect this site from Visibility?', 'agentic-seo-for-visibility')); ?>')">
+          <form method="post" action="<?php echo esc_url($action_url); ?>" onsubmit="return confirm('<?php echo esc_js(__('Disconnect this site from Visibility?', 'agentic-seo-for-visibility')); ?>')">
             <?php wp_nonce_field('visibility_disconnect'); ?>
             <input type="hidden" name="action" value="visibility_disconnect" />
             <p class="description" style="margin-bottom:12px">
@@ -176,7 +207,7 @@ class Visibility_Settings {
             <li><?php echo esc_html__('Paste the code below and click Connect.', 'agentic-seo-for-visibility'); ?></li>
           </ol>
 
-          <form method="post" action="<?php echo $action_url; ?>" style="margin-top:20px">
+          <form method="post" action="<?php echo esc_url($action_url); ?>" style="margin-top:20px">
             <?php wp_nonce_field('visibility_pair'); ?>
             <input type="hidden" name="action" value="visibility_pair" />
             <label for="visibility_pairing_code" style="display:block;font-weight:600;margin-bottom:6px">
