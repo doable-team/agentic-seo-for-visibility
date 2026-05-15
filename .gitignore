@@ -1,4 +1,4 @@
 .DS_Store
-visibility-*.zip
-visibility.zip
+# Build artifacts — never commit the packaged plugin zip.
+*.zip
 node_modules/

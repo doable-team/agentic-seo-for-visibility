@@ -22,7 +22,7 @@ class Visibility_Client {
   public static function pair($code) {
     $code = trim((string) $code);
     if ($code === '') {
-      return new WP_Error('visibility_no_code', __('Please enter a pairing code.', 'visibility'));
+      return new WP_Error('visibility_no_code', __('Please enter a pairing code.', 'agentic-seo-for-visibility'));
     }
 
     $resp = wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/pair', [
@@ -49,12 +49,12 @@ class Visibility_Client {
     $body   = json_decode(wp_remote_retrieve_body($resp), true);
 
     if ($status < 200 || $status >= 300) {
-      $msg = isset($body['error']['message']) ? $body['error']['message'] : __('Pairing failed.', 'visibility');
+      $msg = isset($body['error']['message']) ? $body['error']['message'] : __('Pairing failed.', 'agentic-seo-for-visibility');
       return new WP_Error('visibility_pair_failed', $msg);
     }
 
     if (empty($body['siteToken']) || empty($body['projectId'])) {
-      return new WP_Error('visibility_pair_bad_response', __('Unexpected response from Visibility.', 'visibility'));
+      return new WP_Error('visibility_pair_bad_response', __('Unexpected response from Visibility.', 'agentic-seo-for-visibility'));
     }
 
     update_option('visibility_site_token', $body['siteToken'], false);

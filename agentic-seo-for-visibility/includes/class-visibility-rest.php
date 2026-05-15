@@ -124,12 +124,12 @@ class Visibility_REST {
   public function authenticate($request) {
     $header = $request->get_header('authorization');
     if (!$header || stripos($header, 'Bearer ') !== 0) {
-      return new WP_Error('visibility_no_auth', __('Missing bearer token.', 'visibility'), ['status' => 401]);
+      return new WP_Error('visibility_no_auth', __('Missing bearer token.', 'agentic-seo-for-visibility'), ['status' => 401]);
     }
     $token  = trim(substr($header, 7));
     $stored = Visibility_Client::site_token();
     if ($stored === '' || !hash_equals($stored, $token)) {
-      return new WP_Error('visibility_bad_token', __('Invalid site token.', 'visibility'), ['status' => 401]);
+      return new WP_Error('visibility_bad_token', __('Invalid site token.', 'agentic-seo-for-visibility'), ['status' => 401]);
     }
     return true;
   }
@@ -200,7 +200,7 @@ class Visibility_REST {
     $id = (int) $request['id'];
     $post = get_post($id);
     if (!$post) {
-      return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
+      return new WP_Error('visibility_no_post', __('Post not found.', 'agentic-seo-for-visibility'), ['status' => 404]);
     }
     return rest_ensure_response($this->serialize_post_full($post->ID));
   }
@@ -220,7 +220,7 @@ class Visibility_REST {
   public function update_post(WP_REST_Request $request) {
     $id = (int) $request['id'];
     if (!get_post($id)) {
-      return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
+      return new WP_Error('visibility_no_post', __('Post not found.', 'agentic-seo-for-visibility'), ['status' => 404]);
     }
     $params = $request->get_json_params() ?: [];
     $args   = $this->build_post_args($params, ['ID' => $id]);
@@ -239,11 +239,11 @@ class Visibility_REST {
     $force = filter_var($request->get_param('force'), FILTER_VALIDATE_BOOLEAN);
     $post = get_post($id);
     if (!$post) {
-      return new WP_Error('visibility_no_post', __('Post not found.', 'visibility'), ['status' => 404]);
+      return new WP_Error('visibility_no_post', __('Post not found.', 'agentic-seo-for-visibility'), ['status' => 404]);
     }
     $result = wp_delete_post($id, $force);
     if (!$result) {
-      return new WP_Error('visibility_delete_failed', __('Could not delete post.', 'visibility'), ['status' => 500]);
+      return new WP_Error('visibility_delete_failed', __('Could not delete post.', 'agentic-seo-for-visibility'), ['status' => 500]);
     }
     return rest_ensure_response([
       'id'      => $id,
@@ -325,7 +325,7 @@ class Visibility_REST {
       $params = $request->get_json_params() ?: [];
       $name   = isset($params['name']) ? sanitize_text_field((string) $params['name']) : '';
       if ($name === '') {
-        return new WP_Error('visibility_term_no_name', __('Term name required.', 'visibility'), ['status' => 400]);
+        return new WP_Error('visibility_term_no_name', __('Term name required.', 'agentic-seo-for-visibility'), ['status' => 400]);
       }
       $args = [];
       if (isset($params['slug']))        $args['slug']        = sanitize_title((string) $params['slug']);
@@ -373,7 +373,7 @@ class Visibility_REST {
     $params = $request->get_json_params() ?: [];
     $sourceUrl = isset($params['source_url']) ? esc_url_raw((string) $params['source_url']) : '';
     if ($sourceUrl === '') {
-      return new WP_Error('visibility_no_url', __('source_url is required.', 'visibility'), ['status' => 400]);
+      return new WP_Error('visibility_no_url', __('source_url is required.', 'agentic-seo-for-visibility'), ['status' => 400]);
     }
     $title = isset($params['title']) ? sanitize_text_field((string) $params['title']) : '';
     $alt   = isset($params['alt_text']) ? sanitize_text_field((string) $params['alt_text']) : '';

@@ -1,13 +1,13 @@
 <?php
 /**
- * Plugin Name: Visibility
+ * Plugin Name: Agentic SEO for Visibility
  * Plugin URI: https://app.visibility.so
- * Description: Connect your WordPress site to Visibility so your agents can audit and publish content directly. Pair once with a short code — no app passwords required.
- * Version: 0.4.3
- * Author: Visibility Team
+ * Description: Connect your WordPress site to the Visibility service at https://app.visibility.so so AI agents in your Visibility project can audit and publish content directly. Pair once with a short code — no Application Passwords required. Published by the team behind Visibility (visibility.so).
+ * Version: 0.6.0
+ * Author: rankth
  * Author URI: https://app.visibility.so
  * License: GPL v2 or later
- * Text Domain: visibility
+ * Text Domain: agentic-seo-for-visibility
  * Requires at least: 6.0
  * Requires PHP: 7.4
  */
@@ -16,14 +16,14 @@ if (!defined('ABSPATH')) {
   exit;
 }
 
-define('VISIBILITY_PLUGIN_VERSION', '0.4.3');
+define('VISIBILITY_PLUGIN_VERSION', '0.6.0');
 define('VISIBILITY_PLUGIN_FILE', __FILE__);
 define('VISIBILITY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
 // Server URL is filterable so we can point a staging plugin install at a
 // non-prod backend without forking the code. Defaults to production.
 function visibility_api_base_url() {
-  return apply_filters('visibility_api_base_url', 'https://florence-derived-soldiers-cardiovascular.trycloudflare.com'); // https://app.visibility.so
+  return apply_filters('visibility_api_base_url', 'https://app.visibility.so');
 }
 
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-client.php';
