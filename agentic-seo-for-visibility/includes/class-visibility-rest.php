@@ -46,6 +46,39 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
 
+    // ─── Event receivers (server → plugin pushes) ──────────────────────
+    //
+    // The Visibility server pushes events here whenever something
+    // happens that the plugin should react to NOW instead of waiting
+    // on the 5-minute WP-Cron tick. All endpoints share the standard
+    // bearer-token auth (the same site token used everywhere else).
+
+    // Single-action push: server pushes a freshly approved request
+    // with its full payload so the plugin can execute immediately.
+    register_rest_route('visibility/v1', '/events/action-approved', [
+      'methods'             => 'POST',
+      'callback'            => [$this, 'event_action_approved'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
+    // Bulk catch-up: server (or anything else) tells the plugin to drain
+    // every approved-but-not-yet-executed request from its inbox. Used
+    // as a safety net — also called from the daily heartbeat.
+    register_rest_route('visibility/v1', '/events/drain-inbox', [
+      'methods'             => 'POST',
+      'callback'            => [$this, 'event_drain_inbox'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
+    // Site-config nudge: server tells the plugin its allow_publish or
+    // disabled flag changed. Plugin caches the new state so admin UI
+    // (banners, badges) stays fresh without polling.
+    register_rest_route('visibility/v1', '/events/site-config-changed', [
+      'methods'             => 'POST',
+      'callback'            => [$this, 'event_site_config_changed'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // Posts
     register_rest_route('visibility/v1', '/posts', [
       [
@@ -135,6 +168,60 @@ class Visibility_REST {
   }
 
   // ── /health ─────────────────────────────────────────────────────────
+
+  /** Server pushes a single freshly-approved action with its full
+   *  payload. The plugin executes it via Visibility_Executor and
+   *  reports the outcome back to the server. */
+  public function event_action_approved(WP_REST_Request $request) {
+    if (!class_exists('Visibility_Executor') || !class_exists('Visibility_Client')) {
+      return new WP_Error('visibility_internals_missing', 'Plugin internals not loaded.', ['status' => 500]);
+    }
+    $body = $request->get_json_params();
+    if (!is_array($body)) {
+      return new WP_Error('visibility_bad_body', 'JSON body required.', ['status' => 400]);
+    }
+    $request_id  = isset($body['requestId']) ? sanitize_text_field((string) $body['requestId']) : '';
+    $action_type = isset($body['actionType']) ? sanitize_text_field((string) $body['actionType']) : '';
+    $payload     = isset($body['actionPayload']) && is_array($body['actionPayload']) ? $body['actionPayload'] : [];
+    if ($request_id === '' || $action_type === '') {
+      return new WP_Error('visibility_bad_body', 'requestId and actionType are required.', ['status' => 400]);
+    }
+    list($ok, $result, $err) = Visibility_Executor::execute($action_type, $payload);
+    Visibility_Client::report_execution($request_id, $ok, $result, $err);
+    return rest_ensure_response([
+      'ok'        => (bool) $ok,
+      'requestId' => $request_id,
+      'result'    => $result,
+      'error'     => $err,
+    ]);
+  }
+
+  /** Bulk catch-up — pulls every approved-not-yet-executed request from
+   *  the server inbox and runs the executor over them. Same code path
+   *  WP-Cron uses, just triggered on demand. */
+  public function event_drain_inbox(WP_REST_Request $request) {
+    if (!class_exists('Visibility_Requests')) {
+      return new WP_Error('visibility_no_requests_class', 'Plugin internals not loaded.', ['status' => 500]);
+    }
+    Visibility_Requests::run_cron_tick();
+    return rest_ensure_response(['ok' => true]);
+  }
+
+  /** Site-config push from server — cache the new state so admin UI
+   *  banners/badges stay accurate without polling. */
+  public function event_site_config_changed(WP_REST_Request $request) {
+    $body = $request->get_json_params();
+    if (!is_array($body)) {
+      return new WP_Error('visibility_bad_body', 'JSON body required.', ['status' => 400]);
+    }
+    if (array_key_exists('allowPublish', $body)) {
+      update_option('visibility_allow_publish', (bool) $body['allowPublish'] ? '1' : '0', false);
+    }
+    if (array_key_exists('disabled', $body)) {
+      update_option('visibility_disabled', (bool) $body['disabled'] ? '1' : '0', false);
+    }
+    return rest_ensure_response(['ok' => true]);
+  }
 
   public function health(WP_REST_Request $request) {
     $counts = wp_count_posts('post');

@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.7.0
+Stable tag: 0.7.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,17 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.7.1 =
+* Added: Real-time event-receiver endpoints under
+  `/wp-json/visibility/v1/events/*`. The Visibility server pushes
+  approved actions straight here (with their full payload), so
+  changes show up in WordPress within seconds of approval instead
+  of waiting on the 5-minute WP-Cron tick.
+  * `events/action-approved` -- executes a single approved action.
+  * `events/drain-inbox` -- bulk catch-up.
+  * `events/site-config-changed` -- mirrors the allow_publish /
+    disabled flags so admin banners stay accurate without polling.
 
 = 0.7.0 =
 * Added: Approval inbox for every AI write action. Two new submenu
