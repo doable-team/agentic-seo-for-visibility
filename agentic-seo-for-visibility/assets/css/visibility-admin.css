@@ -1,0 +1,95 @@
+.visibility-admin .visibility-inbox-root {
+  margin-top: 1rem;
+}
+.visibility-admin .visibility-inbox-toolbar {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.visibility-admin .visibility-inbox-status {
+  font-size: 12px;
+  color: #555;
+}
+.visibility-admin .visibility-inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+.visibility-admin .visibility-empty {
+  border: 1px dashed #c3c4c7;
+  background: #f6f7f7;
+  padding: 1.5rem;
+  text-align: center;
+  color: #555;
+  border-radius: 6px;
+}
+.visibility-admin .visibility-card {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.visibility-admin .visibility-card-head {
+  display: flex;
+  gap: .375rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.visibility-admin .visibility-card-title {
+  margin: 0;
+  font-size: 14px;
+}
+.visibility-admin .visibility-card-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: #555;
+}
+.visibility-admin .visibility-card-detail {
+  margin: 0;
+  padding: .5rem .75rem;
+  font-size: 11px;
+  background: #f6f7f7;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.visibility-admin .visibility-card-actions {
+  display: flex;
+  gap: .5rem;
+  margin-top: .25rem;
+}
+.visibility-admin .visibility-reject-form {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-top: .25rem;
+}
+.visibility-admin .visibility-reject-form textarea {
+  width: 100%;
+  font-family: inherit;
+}
+.visibility-admin .visibility-group {
+  font-family: monospace;
+  font-size: 11px;
+  color: #777;
+}
+.visibility-admin .visibility-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+.visibility-admin .visibility-pill-emerald { background: #e8f6ed; color: #1f6f3b; border-color: #a7d9b8; }
+.visibility-admin .visibility-pill-amber   { background: #fdf3df; color: #8a5a00; border-color: #e3c98e; }
+.visibility-admin .visibility-pill-rose    { background: #fce6e9; color: #8a1f30; border-color: #e3a9b2; }
+.visibility-admin .visibility-pill-blue    { background: #e3f0ff; color: #134a8a; border-color: #a3c2eb; }
+.visibility-admin .visibility-pill-muted   { background: #f0f0f0; color: #555; border-color: #c3c4c7; }
+.visibility-admin .visibility-pill-auto    { background: #e3f0ff; color: #134a8a; border-color: #a3c2eb; }

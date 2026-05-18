@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.6.3
+Stable tag: 0.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,27 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.7.0 =
+* Added: Approval inbox for every AI write action. Two new submenu
+  pages appear under Settings -- Approvals (pending) and Activity
+  (history). Every post, page, media upload, taxonomy edit, SEO
+  metadata change, or redirect that the Visibility AI requests now
+  shows up as a card you review and approve (or reject with a note
+  the AI sees in its next run).
+* Added: Auto-approval rules so trusted action types (e.g. drafts,
+  alt-text edits) can flow through automatically with optional time
+  and usage limits. High-risk actions never auto-approve unless you
+  explicitly opt in with a separate checkbox.
+* Added: Background cron (every 5 minutes) that executes
+  auto-approved actions even when no admin is logged in.
+* Tightened: Action payloads are validated server-side against a
+  canonical action-type registry and a hard deny list (plugin/theme
+  ops, user changes, permalink structure, custom CSS, arbitrary
+  options/queries) so no AI request can bypass the approval gate.
+* Removed: Application Password connection mode. Plugin pairing is
+  now the only supported transport. Existing app-password sites
+  must be re-paired with the plugin.
 
 = 0.6.3 =
 * Split the `Plugin URI` and `Author URI` headers — they were both

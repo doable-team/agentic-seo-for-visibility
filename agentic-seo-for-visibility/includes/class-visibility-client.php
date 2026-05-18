@@ -62,6 +62,9 @@ class Visibility_Client {
     update_option('visibility_project_name', isset($body['projectName']) ? (string) $body['projectName'] : '', false);
     update_option('visibility_company_id', $body['companyId'] ?? '', false);
     update_option('visibility_company_name', isset($body['companyName']) ? (string) $body['companyName'] : '', false);
+    if (!empty($body['siteId'])) {
+      update_option('visibility_site_id', (string) $body['siteId'], false);
+    }
     update_option('visibility_paired_at', time(), false);
     update_option('visibility_last_seen_at', time(), false);
 
@@ -101,6 +104,7 @@ class Visibility_Client {
       ]);
     }
     delete_option('visibility_site_token');
+    delete_option('visibility_site_id');
     delete_option('visibility_project_id');
     delete_option('visibility_project_name');
     delete_option('visibility_company_id');
@@ -155,6 +159,140 @@ class Visibility_Client {
     if (isset($body['companyName'])) {
       update_option('visibility_company_name', (string) $body['companyName'], false);
     }
+    if (!empty($body['siteId'])) {
+      update_option('visibility_site_id', (string) $body['siteId'], false);
+    }
     update_option('visibility_last_seen_at', time(), false);
+  }
+
+  // ─── Action-request API ───────────────────────────────────────────────
+
+  private static function site_id() {
+    // Pairing response doesn't currently carry siteId — but the bearer
+    // token resolves to it server-side. We store it the first time we
+    // see it in a response (inbox payloads include `siteId`).
+    return (string) get_option('visibility_site_id', '');
+  }
+
+  private static function remember_site_id($id) {
+    if (!empty($id) && $id !== self::site_id()) {
+      update_option('visibility_site_id', (string) $id, false);
+    }
+  }
+
+  /** Authenticated GET against the Visibility plugin API. */
+  private static function api_get($path) {
+    if (!self::is_paired()) {
+      return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-for-visibility'));
+    }
+    $resp = wp_remote_get(visibility_api_base_url() . $path, [
+      'timeout' => 15,
+      'headers' => [
+        'Authorization' => 'Bearer ' . self::site_token(),
+        'Accept'        => 'application/json',
+        'User-Agent'    => 'Visibility-WP-Plugin/' . VISIBILITY_PLUGIN_VERSION,
+      ],
+    ]);
+    return self::unwrap($resp);
+  }
+
+  private static function api_post($path, $body) {
+    if (!self::is_paired()) {
+      return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-for-visibility'));
+    }
+    $resp = wp_remote_post(visibility_api_base_url() . $path, [
+      'timeout' => 20,
+      'headers' => [
+        'Authorization'         => 'Bearer ' . self::site_token(),
+        'Content-Type'          => 'application/json',
+        'Accept'                => 'application/json',
+        'User-Agent'            => 'Visibility-WP-Plugin/' . VISIBILITY_PLUGIN_VERSION,
+        'X-Visibility-WP-User'  => self::current_wp_user_login(),
+      ],
+      'body' => wp_json_encode($body),
+    ]);
+    return self::unwrap($resp);
+  }
+
+  private static function unwrap($resp) {
+    if (is_wp_error($resp)) {
+      return $resp;
+    }
+    $status = wp_remote_retrieve_response_code($resp);
+    $body   = json_decode(wp_remote_retrieve_body($resp), true);
+    if ($status < 200 || $status >= 300) {
+      $msg = isset($body['error']['message'])
+        ? $body['error']['message']
+        : sprintf(__('Visibility returned HTTP %d.', 'agentic-seo-for-visibility'), $status);
+      return new WP_Error('visibility_api_error', $msg, ['status' => $status, 'body' => $body]);
+    }
+    return $body;
+  }
+
+  private static function current_wp_user_login() {
+    if (!function_exists('wp_get_current_user')) {
+      return '';
+    }
+    $user = wp_get_current_user();
+    return $user && $user->ID > 0 ? (string) $user->user_login : '';
+  }
+
+  /** Fetch pending + auto-approved-unexecuted requests for this site. */
+  public static function inbox($include_auto = false) {
+    $site_id = self::site_id();
+    if ($site_id === '') {
+      // Cold start: refresh via heartbeat which returns siteId in the body.
+      self::heartbeat();
+      $site_id = self::site_id();
+      if ($site_id === '') {
+        return new WP_Error('visibility_no_site_id', __('Site identifier not available yet — try again shortly.', 'agentic-seo-for-visibility'));
+      }
+    }
+    $path = '/api/wordpress/plugin/sites/' . rawurlencode($site_id) . '/inbox';
+    if ($include_auto) {
+      $path .= '?include=auto_approved_unexecuted';
+    }
+    return self::api_get($path);
+  }
+
+  /** Paginated history listing. */
+  public static function history($status = 'any', $limit = 50) {
+    $site_id = self::site_id();
+    if ($site_id === '') {
+      return [];
+    }
+    $path = '/api/wordpress/plugin/sites/' . rawurlencode($site_id) . '/history?status=' . rawurlencode($status) . '&limit=' . intval($limit);
+    return self::api_get($path);
+  }
+
+  public static function approve($request_id, $note = null) {
+    $site_id = self::site_id();
+    return self::api_post(
+      '/api/wordpress/plugin/sites/' . rawurlencode($site_id) . '/requests/' . rawurlencode($request_id) . '/approve',
+      ['note' => $note]
+    );
+  }
+
+  public static function reject($request_id, $note) {
+    $site_id = self::site_id();
+    return self::api_post(
+      '/api/wordpress/plugin/sites/' . rawurlencode($site_id) . '/requests/' . rawurlencode($request_id) . '/reject',
+      ['note' => $note]
+    );
+  }
+
+  public static function report_execution($request_id, $ok, $result = null, $error_message = null) {
+    $site_id = self::site_id();
+    return self::api_post(
+      '/api/wordpress/plugin/sites/' . rawurlencode($site_id) . '/requests/' . rawurlencode($request_id) . '/execution-result',
+      ['ok' => (bool) $ok, 'result' => $result, 'errorMessage' => $error_message]
+    );
+  }
+
+  /** Called by inbox/history responses — picks the siteId out and caches it. */
+  public static function remember_site_id_from($row) {
+    if (is_array($row) && !empty($row['siteId'])) {
+      self::remember_site_id($row['siteId']);
+    }
   }
 }
