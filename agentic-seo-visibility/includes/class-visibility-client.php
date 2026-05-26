@@ -223,6 +223,7 @@ class Visibility_Client {
     if ($status < 200 || $status >= 300) {
       $msg = isset($body['error']['message'])
         ? $body['error']['message']
+        /* translators: %d is the HTTP status code returned by the Visibility API. */
         : sprintf(__('Visibility returned HTTP %d.', 'agentic-seo-visibility'), $status);
       return new WP_Error('visibility_api_error', $msg, ['status' => $status, 'body' => $body]);
     }

@@ -55,8 +55,12 @@ class Visibility_Requests {
   }
 
   public static function register_menus() {
+    // Approvals + Activity live as submenus under the top-level
+    // `visibility` menu registered by Visibility_Settings. Only shown
+    // once the site is paired — before that the Connection screen is
+    // all there is to do.
     if (!Visibility_Client::is_paired()) {
-      return; // Pairing screen lives on the main settings page.
+      return;
     }
     $pending = self::cached_pending_count();
     $label = $pending > 0
@@ -68,7 +72,7 @@ class Visibility_Requests {
       : __('Approvals', 'agentic-seo-visibility');
 
     add_submenu_page(
-      'options-general.php',
+      'visibility',
       __('Agentic SEO — Approvals', 'agentic-seo-visibility'),
       $label,
       'manage_options',
@@ -77,7 +81,7 @@ class Visibility_Requests {
     );
 
     add_submenu_page(
-      'options-general.php',
+      'visibility',
       __('Agentic SEO — Activity', 'agentic-seo-visibility'),
       __('Activity', 'agentic-seo-visibility'),
       'manage_options',
@@ -87,9 +91,10 @@ class Visibility_Requests {
   }
 
   public static function enqueue_assets($hook) {
+    // Hook suffixes for submenus under the top-level `visibility` menu.
     if (!in_array($hook, [
-      'settings_page_visibility-inbox',
-      'settings_page_visibility-activity',
+      'visibility_page_visibility-inbox',
+      'visibility_page_visibility-activity',
     ], true)) {
       return;
     }
@@ -130,15 +135,17 @@ class Visibility_Requests {
 
   // ─── AJAX handlers ─────────────────────────────────────────────────────
 
-  private static function check_ajax() {
+  /** Capability gate. Call AFTER an inline check_ajax_referer() so the
+   *  nonce verification is visible to static analysis in each handler. */
+  private static function require_admin() {
     if (!current_user_can('manage_options')) {
       wp_send_json_error(['message' => __('Insufficient permissions.', 'agentic-seo-visibility')], 403);
     }
-    check_ajax_referer('visibility_inbox');
   }
 
   public static function ajax_fetch() {
-    self::check_ajax();
+    check_ajax_referer('visibility_inbox');
+    self::require_admin();
     $rows = Visibility_Client::inbox();
     if (is_wp_error($rows)) {
       wp_send_json_error(['message' => $rows->get_error_message()], 502);
@@ -156,7 +163,8 @@ class Visibility_Requests {
   }
 
   public static function ajax_history() {
-    self::check_ajax();
+    check_ajax_referer('visibility_inbox');
+    self::require_admin();
     $status = isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : 'any';
     $rows = Visibility_Client::history($status, 100);
     if (is_wp_error($rows)) {
@@ -166,7 +174,8 @@ class Visibility_Requests {
   }
 
   public static function ajax_approve() {
-    self::check_ajax();
+    check_ajax_referer('visibility_inbox');
+    self::require_admin();
     $id   = isset($_POST['requestId']) ? sanitize_text_field(wp_unslash($_POST['requestId'])) : '';
     $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : null;
     if ($id === '') {
@@ -185,7 +194,8 @@ class Visibility_Requests {
   }
 
   public static function ajax_reject() {
-    self::check_ajax();
+    check_ajax_referer('visibility_inbox');
+    self::require_admin();
     $id   = isset($_POST['requestId']) ? sanitize_text_field(wp_unslash($_POST['requestId'])) : '';
     $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
     if ($id === '' || $note === '') {

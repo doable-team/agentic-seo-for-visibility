@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.7.2
+Stable tag: 0.7.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,17 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.7.3 =
+* All plugin screens now live under a single top-level **Agentic SEO**
+  menu in the sidebar (its own icon), with three clearly-labelled
+  sub-items: **Connection**, **Approvals** (with a pending-count
+  badge), and **Activity**. Previously these were three lookalike
+  entries buried under Settings.
+* Coding-standards pass for the WordPress.org review: added a
+  translators comment to a placeholder string and made the AJAX nonce
+  verification visible to static analysis (the nonce was always
+  checked — this just satisfies the scanner).
 
 = 0.7.2 =
 * Fixed: Text domain now matches the plugin slug (`agentic-seo-visibility`)

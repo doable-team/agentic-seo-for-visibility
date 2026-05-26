@@ -60,9 +60,27 @@ class Visibility_Settings {
   }
 
   public function register_menu() {
-    add_options_page(
+    // Dedicated top-level menu so all three plugin screens live together
+    // under one clearly-labelled parent (instead of three lookalike
+    // entries buried under Settings). The Approvals + Activity submenus
+    // are added by Visibility_Requests against this same `visibility`
+    // parent slug.
+    add_menu_page(
       __('Agentic SEO for Visibility', 'agentic-seo-visibility'),
       __('Agentic SEO', 'agentic-seo-visibility'),
+      'manage_options',
+      'visibility',
+      [$this, 'render'],
+      'dashicons-megaphone',
+      58
+    );
+    // First submenu shares the parent slug so the parent click lands on
+    // the connection screen, and we get a readable "Connection" label
+    // instead of WP duplicating the parent title.
+    add_submenu_page(
+      'visibility',
+      __('Agentic SEO — Connection', 'agentic-seo-visibility'),
+      __('Connection', 'agentic-seo-visibility'),
       'manage_options',
       'visibility',
       [$this, 'render']
@@ -79,10 +97,10 @@ class Visibility_Settings {
 
     if (is_wp_error($result)) {
       $message = $result->get_error_message();
-      wp_safe_redirect(add_query_arg($this->get_notice_query_args('error', $message), admin_url('options-general.php')));
+      wp_safe_redirect(add_query_arg($this->get_notice_query_args('error', $message), admin_url('admin.php')));
       exit;
     }
-    wp_safe_redirect(add_query_arg($this->get_notice_query_args('paired'), admin_url('options-general.php')));
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args('paired'), admin_url('admin.php')));
     exit;
   }
 
@@ -92,7 +110,7 @@ class Visibility_Settings {
     }
     check_admin_referer('visibility_disconnect');
     Visibility_Client::disconnect();
-    wp_safe_redirect(add_query_arg($this->get_notice_query_args('disconnected'), admin_url('options-general.php')));
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args('disconnected'), admin_url('admin.php')));
     exit;
   }
 

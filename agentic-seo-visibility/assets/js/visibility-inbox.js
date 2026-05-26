@@ -160,7 +160,19 @@
       // Only show pending rows in the Inbox view.
       rows = rows.filter(function (r) { return r.status === 'pending'; });
       renderRows(rows, list, list.dataset.emptyText || 'No pending requests.');
+      updateInboxCount(rows.length);
     });
+  }
+
+  function updateInboxCount(n) {
+    var badge = $('#visibility-inbox-count');
+    if (!badge) return;
+    if (n > 0) {
+      badge.textContent = String(n);
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
   }
 
   function refreshHistory() {
@@ -183,6 +195,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    // Approvals and Activity are separate admin pages; only one of these
+    // roots exists per page load.
     if ($('#visibility-inbox-list')) {
       $('#visibility-inbox-refresh').addEventListener('click', refresh);
       refresh();

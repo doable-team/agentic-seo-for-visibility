@@ -93,3 +93,23 @@
 .visibility-admin .visibility-pill-blue    { background: #e3f0ff; color: #134a8a; border-color: #a3c2eb; }
 .visibility-admin .visibility-pill-muted   { background: #f0f0f0; color: #555; border-color: #c3c4c7; }
 .visibility-admin .visibility-pill-auto    { background: #e3f0ff; color: #134a8a; border-color: #a3c2eb; }
+
+.visibility-admin .visibility-tabs {
+  margin-bottom: 1rem;
+}
+.visibility-admin .visibility-tab-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 6px;
+  margin-left: 4px;
+  border-radius: 9px;
+  background: #d63638;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: text-top;
+}
+.visibility-admin .visibility-tab-panel {
+  margin-top: 1rem;
+}
