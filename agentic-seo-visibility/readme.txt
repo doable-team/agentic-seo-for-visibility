@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.7.3
+Stable tag: 0.7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,20 +26,20 @@ Pair WordPress with your Visibility project so AI agents can audit and publish c
 = How it works =
 
 1. In your Visibility project, click **Connect via plugin** and copy the short pairing code (for example `VIS-A7K9-XB`).
-2. Install and activate this plugin, then open **Settings → Agentic SEO** and paste the code.
+2. Install and activate this plugin, then open **Agentic SEO → Connection** and paste the code.
 3. Your project and this site are paired. AI agents can now read, draft, and (when enabled) publish WordPress content here.
 
-You can disconnect at any time from Settings → Agentic SEO, or from the Visibility dashboard. A Visibility account at [app.visibility.so](https://app.visibility.so) is required. See the **External services** section below for the full list of network calls this plugin makes.
+You can disconnect at any time from Agentic SEO → Connection, or from the Visibility dashboard. A Visibility account at [app.visibility.so](https://app.visibility.so) is required. See the **External services** section below for the full list of network calls this plugin makes.
 
 == Installation ==
 
 1. Upload the `agentic-seo-visibility` folder to the `/wp-content/plugins/` directory, or install through the WordPress Plugins screen.
 2. Activate the plugin through the **Plugins** menu.
-3. Go to **Settings → Agentic SEO** and follow the pairing instructions.
+3. Go to **Agentic SEO → Connection** and follow the pairing instructions.
 
 == Screenshots ==
 
-1. Settings → Agentic SEO, paired state, showing the connected company + project, last-seen heartbeat, and plugin version.
+1. Agentic SEO → Connection, paired state, showing the connected company + project, last-seen heartbeat, and plugin version.
 
 == Frequently Asked Questions ==
 
@@ -73,7 +73,7 @@ Yes. Each subsite pairs independently with its own Visibility project. Network-a
 
 = Can I use the same WordPress site with multiple Visibility projects? =
 
-Each WordPress site pairs with one Visibility project at a time. Disconnect from Settings → Agentic SEO and re-pair when you need to move the site to a different project.
+Each WordPress site pairs with one Visibility project at a time. Disconnect from Agentic SEO → Connection and re-pair when you need to move the site to a different project.
 
 = What happens if the pairing code expires before I paste it? =
 
@@ -95,11 +95,11 @@ WordPress 6.0 or newer and PHP 7.4 or newer. Tested up to WordPress 7.0.
 
 This plugin connects your WordPress site to **Visibility**, an external SaaS service at https://app.visibility.so. A Visibility account is required. The plugin makes the following outbound HTTPS requests from your site:
 
-1. **POST https://app.visibility.so/api/wordpress/plugin/pair** — sent once when you submit a pairing code on the Settings → Agentic SEO screen. Body includes: the pairing code, your site URL, site name, WordPress version, and the installed plugin version. Response contains a shared site token plus the connected company + project IDs and names so the plugin can display them.
+1. **POST https://app.visibility.so/api/wordpress/plugin/pair** — sent once when you submit a pairing code on the Agentic SEO → Connection screen. Body includes: the pairing code, your site URL, site name, WordPress version, and the installed plugin version. Response contains a shared site token plus the connected company + project IDs and names so the plugin can display them.
 
 2. **POST https://app.visibility.so/api/wordpress/plugin/heartbeat** — sent at most once per day from WP-Cron while the plugin is paired. Body includes the installed plugin version; the shared site token is sent in the `Authorization: Bearer` header. Used to refresh the "Last seen" timestamp and pick up renames of the connected company or project on Visibility's side.
 
-3. **POST https://app.visibility.so/api/wordpress/plugin/disconnect** — sent when you click Disconnect on the Settings → Agentic SEO screen. Body includes the installed plugin version; the shared site token is sent in the `Authorization: Bearer` header. Tells Visibility to remove your site from the project. Local cleanup proceeds even if Visibility is unreachable.
+3. **POST https://app.visibility.so/api/wordpress/plugin/disconnect** — sent when you click Disconnect on the Agentic SEO → Connection screen. Body includes the installed plugin version; the shared site token is sent in the `Authorization: Bearer` header. Tells Visibility to remove your site from the project. Local cleanup proceeds even if Visibility is unreachable.
 
 Inbound requests from Visibility, authenticated with the shared site token, reach the plugin at `/wp-json/visibility/v1/*` and are used by your Visibility project's agents to read, draft, publish, update, or delete posts; manage categories, tags, and media; and check site health. No content leaves your site automatically — content only travels on agent-initiated requests originating from the Visibility project this site is paired to.
 
@@ -107,6 +107,10 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.7.4 =
+* The top-level **Agentic SEO** menu now uses the Visibility logo as
+  its sidebar icon instead of a generic dashicon.
 
 = 0.7.3 =
 * All plugin screens now live under a single top-level **Agentic SEO**
