@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.7.4
+Stable tag: 0.7.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -108,7 +108,7 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
 
-= 0.7.4 =
+= 0.7.5 =
 * Polished the top-level **Agentic SEO** menu icon (now a globe) and
   updated the in-readme setup steps to point at the new
   Agentic SEO → Connection location.
