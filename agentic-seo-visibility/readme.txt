@@ -109,8 +109,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 == Changelog ==
 
 = 0.7.4 =
-* The top-level **Agentic SEO** menu now uses the Visibility logo as
-  its sidebar icon instead of a generic dashicon.
+* Polished the top-level **Agentic SEO** menu icon (now a globe) and
+  updated the in-readme setup steps to point at the new
+  Agentic SEO → Connection location.
 
 = 0.7.3 =
 * All plugin screens now live under a single top-level **Agentic SEO**

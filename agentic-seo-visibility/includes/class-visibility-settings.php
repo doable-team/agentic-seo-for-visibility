@@ -59,14 +59,6 @@ class Visibility_Settings {
     ];
   }
 
-  /** Visibility concentric-arc logo (assets/menu-icon.svg) as a base64
-   *  data URI, recoloured to WordPress's default menu-icon grey so it
-   *  sits naturally alongside the other sidebar icons. Hardcoded rather
-   *  than read at runtime to keep the plugin scanner clean. */
-  private function menu_icon() {
-    return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjkwIDkwIDQ5MiA0OTIiPjxjaXJjbGUgY3g9IjMzNiIgY3k9IjMzNiIgcj0iMjcuMTA1ODgyMzUyOTQxMTc2IiBmaWxsPSIjYTdhYWFkIi8+PGNpcmNsZSBjeD0iMzM2IiBjeT0iMzM2IiByPSI2Ny43NjQ3MDU4ODIzNTI5NCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYTdhYWFkIiBzdHJva2Utd2lkdGg9IjI3LjEwNTg4MjM1Mjk0MTE3NiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtZGFzaGFycmF5PSIyODkuNTI5MTc4OTU0ODM1MzQgNDI1Ljc3ODIwNDM0NTM0NjA3IiBzdHJva2UtZGFzaG9mZnNldD0iLTY4LjEyNDUxMjY5NTI1NTM4Ii8+PGNpcmNsZSBjeD0iMzM2IiBjeT0iMzM2IiByPSIxMjAuNDcwNTg4MjM1Mjk0MTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2E3YWFhZCIgc3Ryb2tlLXdpZHRoPSIyNy4xMDU4ODIzNTI5NDExNzYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWRhc2hhcnJheT0iNTE0LjcxODU0MDM2NDE1MTcgNzU2LjkzOTAyOTk0NzI4MTkiIHN0cm9rZS1kYXNob2Zmc2V0PSItMTIxLjExMDI0NDc5MTU2NTEyIi8+PGNpcmNsZSBjeD0iMzM2IiBjeT0iMzM2IiByPSIxNzMuMTc2NDcwNTg4MjM1MyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYTdhYWFkIiBzdHJva2Utd2lkdGg9IjI3LjEwNTg4MjM1Mjk0MTE3NiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtZGFzaGFycmF5PSI3MzkuOTA3OTAxNzczNDY4MSAxMDg4LjA5OTg1NTU0OTIxNzYiIHN0cm9rZS1kYXNob2Zmc2V0PSItMTc0LjA5NTk3Njg4Nzg3NDg1Ii8+PGNpcmNsZSBjeD0iMzM2IiBjeT0iMzM2IiByPSIyMjUuODgyMzUyOTQxMTc2NDYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2E3YWFhZCIgc3Ryb2tlLXdpZHRoPSIyNy4xMDU4ODIzNTI5NDExNzYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWRhc2hhcnJheT0iOTY1LjA5NzI2MzE4Mjc4NDMgMTQxOS4yNjA2ODExNTExNTM0IiBzdHJva2UtZGFzaG9mZnNldD0iLTIyNy4wODE3MDg5ODQxODQ1NiIvPjwvc3ZnPgo=';
-  }
-
   public function register_menu() {
     // Dedicated top-level menu so all three plugin screens live together
     // under one clearly-labelled parent (instead of three lookalike
@@ -79,7 +71,7 @@ class Visibility_Settings {
       'manage_options',
       'visibility',
       [$this, 'render'],
-      $this->menu_icon(),
+      'dashicons-admin-site-alt3',
       58
     );
     // First submenu shares the parent slug so the parent click lands on
