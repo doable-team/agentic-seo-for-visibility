@@ -48,7 +48,7 @@ class Visibility_Requests {
     if (!isset($schedules['visibility_every_5_min'])) {
       $schedules['visibility_every_5_min'] = [
         'interval' => 5 * MINUTE_IN_SECONDS,
-        'display'  => __('Every 5 minutes (Visibility)', 'agentic-seo-for-visibility'),
+        'display'  => __('Every 5 minutes (Visibility)', 'agentic-seo-visibility'),
       ];
     }
     return $schedules;
@@ -62,14 +62,14 @@ class Visibility_Requests {
     $label = $pending > 0
       ? sprintf(
           /* translators: %s: pending count badge */
-          __('Approvals %s', 'agentic-seo-for-visibility'),
+          __('Approvals %s', 'agentic-seo-visibility'),
           '<span class="awaiting-mod">' . number_format_i18n($pending) . '</span>'
         )
-      : __('Approvals', 'agentic-seo-for-visibility');
+      : __('Approvals', 'agentic-seo-visibility');
 
     add_submenu_page(
       'options-general.php',
-      __('Agentic SEO — Approvals', 'agentic-seo-for-visibility'),
+      __('Agentic SEO — Approvals', 'agentic-seo-visibility'),
       $label,
       'manage_options',
       'visibility-inbox',
@@ -78,8 +78,8 @@ class Visibility_Requests {
 
     add_submenu_page(
       'options-general.php',
-      __('Agentic SEO — Activity', 'agentic-seo-for-visibility'),
-      __('Activity', 'agentic-seo-for-visibility'),
+      __('Agentic SEO — Activity', 'agentic-seo-visibility'),
+      __('Activity', 'agentic-seo-visibility'),
       'manage_options',
       'visibility-activity',
       [__CLASS__, 'render_activity_page']
@@ -116,14 +116,14 @@ class Visibility_Requests {
 
   public static function render_inbox_page() {
     if (!current_user_can('manage_options')) {
-      wp_die(esc_html__('Insufficient permissions.', 'agentic-seo-for-visibility'));
+      wp_die(esc_html__('Insufficient permissions.', 'agentic-seo-visibility'));
     }
     require VISIBILITY_PLUGIN_DIR . 'views/admin-inbox.php';
   }
 
   public static function render_activity_page() {
     if (!current_user_can('manage_options')) {
-      wp_die(esc_html__('Insufficient permissions.', 'agentic-seo-for-visibility'));
+      wp_die(esc_html__('Insufficient permissions.', 'agentic-seo-visibility'));
     }
     require VISIBILITY_PLUGIN_DIR . 'views/admin-activity.php';
   }
@@ -132,7 +132,7 @@ class Visibility_Requests {
 
   private static function check_ajax() {
     if (!current_user_can('manage_options')) {
-      wp_send_json_error(['message' => __('Insufficient permissions.', 'agentic-seo-for-visibility')], 403);
+      wp_send_json_error(['message' => __('Insufficient permissions.', 'agentic-seo-visibility')], 403);
     }
     check_ajax_referer('visibility_inbox');
   }
@@ -170,7 +170,7 @@ class Visibility_Requests {
     $id   = isset($_POST['requestId']) ? sanitize_text_field(wp_unslash($_POST['requestId'])) : '';
     $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : null;
     if ($id === '') {
-      wp_send_json_error(['message' => __('Missing request ID.', 'agentic-seo-for-visibility')], 400);
+      wp_send_json_error(['message' => __('Missing request ID.', 'agentic-seo-visibility')], 400);
     }
     $row = Visibility_Client::approve($id, $note);
     if (is_wp_error($row)) {
@@ -189,7 +189,7 @@ class Visibility_Requests {
     $id   = isset($_POST['requestId']) ? sanitize_text_field(wp_unslash($_POST['requestId'])) : '';
     $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
     if ($id === '' || $note === '') {
-      wp_send_json_error(['message' => __('Request ID and rejection note are required.', 'agentic-seo-for-visibility')], 400);
+      wp_send_json_error(['message' => __('Request ID and rejection note are required.', 'agentic-seo-visibility')], 400);
     }
     $row = Visibility_Client::reject($id, $note);
     if (is_wp_error($row)) {

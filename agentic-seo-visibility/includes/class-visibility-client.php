@@ -22,7 +22,7 @@ class Visibility_Client {
   public static function pair($code) {
     $code = trim((string) $code);
     if ($code === '') {
-      return new WP_Error('visibility_no_code', __('Please enter a pairing code.', 'agentic-seo-for-visibility'));
+      return new WP_Error('visibility_no_code', __('Please enter a pairing code.', 'agentic-seo-visibility'));
     }
 
     $resp = wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/pair', [
@@ -49,12 +49,12 @@ class Visibility_Client {
     $body   = json_decode(wp_remote_retrieve_body($resp), true);
 
     if ($status < 200 || $status >= 300) {
-      $msg = isset($body['error']['message']) ? $body['error']['message'] : __('Pairing failed.', 'agentic-seo-for-visibility');
+      $msg = isset($body['error']['message']) ? $body['error']['message'] : __('Pairing failed.', 'agentic-seo-visibility');
       return new WP_Error('visibility_pair_failed', $msg);
     }
 
     if (empty($body['siteToken']) || empty($body['projectId'])) {
-      return new WP_Error('visibility_pair_bad_response', __('Unexpected response from Visibility.', 'agentic-seo-for-visibility'));
+      return new WP_Error('visibility_pair_bad_response', __('Unexpected response from Visibility.', 'agentic-seo-visibility'));
     }
 
     update_option('visibility_site_token', $body['siteToken'], false);
@@ -183,7 +183,7 @@ class Visibility_Client {
   /** Authenticated GET against the Visibility plugin API. */
   private static function api_get($path) {
     if (!self::is_paired()) {
-      return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-for-visibility'));
+      return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-visibility'));
     }
     $resp = wp_remote_get(visibility_api_base_url() . $path, [
       'timeout' => 15,
@@ -198,7 +198,7 @@ class Visibility_Client {
 
   private static function api_post($path, $body) {
     if (!self::is_paired()) {
-      return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-for-visibility'));
+      return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-visibility'));
     }
     $resp = wp_remote_post(visibility_api_base_url() . $path, [
       'timeout' => 20,
@@ -223,7 +223,7 @@ class Visibility_Client {
     if ($status < 200 || $status >= 300) {
       $msg = isset($body['error']['message'])
         ? $body['error']['message']
-        : sprintf(__('Visibility returned HTTP %d.', 'agentic-seo-for-visibility'), $status);
+        : sprintf(__('Visibility returned HTTP %d.', 'agentic-seo-visibility'), $status);
       return new WP_Error('visibility_api_error', $msg, ['status' => $status, 'body' => $body]);
     }
     return $body;
@@ -245,7 +245,7 @@ class Visibility_Client {
       self::heartbeat();
       $site_id = self::site_id();
       if ($site_id === '') {
-        return new WP_Error('visibility_no_site_id', __('Site identifier not available yet — try again shortly.', 'agentic-seo-for-visibility'));
+        return new WP_Error('visibility_no_site_id', __('Site identifier not available yet — try again shortly.', 'agentic-seo-visibility'));
       }
     }
     $path = '/api/wordpress/plugin/sites/' . rawurlencode($site_id) . '/inbox';

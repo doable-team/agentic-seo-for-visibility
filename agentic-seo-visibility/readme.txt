@@ -2,9 +2,9 @@
 Contributors: rankth
 Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.7.1
+Stable tag: 0.7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -33,7 +33,7 @@ You can disconnect at any time from Settings → Agentic SEO, or from the Visibi
 
 == Installation ==
 
-1. Upload the `agentic-seo-for-visibility` folder to the `/wp-content/plugins/` directory, or install through the WordPress Plugins screen.
+1. Upload the `agentic-seo-visibility` folder to the `/wp-content/plugins/` directory, or install through the WordPress Plugins screen.
 2. Activate the plugin through the **Plugins** menu.
 3. Go to **Settings → Agentic SEO** and follow the pairing instructions.
 
@@ -89,7 +89,7 @@ Deactivate it from the Plugins screen, then delete. On deactivation the daily he
 
 = What WordPress and PHP versions does it require? =
 
-WordPress 6.0 or newer and PHP 7.4 or newer. Tested up to WordPress 6.9.
+WordPress 6.0 or newer and PHP 7.4 or newer. Tested up to WordPress 7.0.
 
 == External services ==
 
@@ -107,6 +107,12 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.7.2 =
+* Fixed: Text domain now matches the plugin slug (`agentic-seo-visibility`)
+  so translations load correctly and the WordPress.org plugin scanner
+  passes. The plugin's display name is unchanged.
+* Bumped "Tested up to" to WordPress 7.0.
 
 = 0.7.1 =
 * Added: Real-time event-receiver endpoints under
