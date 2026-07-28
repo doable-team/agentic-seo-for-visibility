@@ -1,13 +1,14 @@
 <?php
 /**
- * Visibility action-request admin surface.
+ * Visibility action-request execution.
  *
- *  - Registers the "Inbox" and "Activity" submenu pages under the plugin's
- *    top-level menu.
- *  - Exposes AJAX endpoints for the inbox JS to call (fetch pending,
- *    approve, reject).
- *  - Schedules the cron tick that pulls auto-approved requests from
- *    Visibility and executes them locally.
+ * Schedules the cron tick that pulls approved requests from Visibility and
+ * executes them locally (also reachable via the plugin's REST `pull` route).
+ *
+ * There is deliberately NO approvals UI here. Requests are reviewed and
+ * decided in Visibility's own Inbox → Approvals, which is the single place a
+ * decision is ever made; duplicating that screen in WP admin only created a
+ * second place to look and a second thing to keep correct.
  */
 
 if (!defined('ABSPATH')) {
@@ -19,14 +20,6 @@ class Visibility_Requests {
   const CRON_HOOK = 'visibility_pull_approved_requests';
 
   public static function init() {
-    add_action('admin_menu', [__CLASS__, 'register_menus'], 20);
-    add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
-
-    add_action('wp_ajax_visibility_inbox_fetch',   [__CLASS__, 'ajax_fetch']);
-    add_action('wp_ajax_visibility_inbox_approve', [__CLASS__, 'ajax_approve']);
-    add_action('wp_ajax_visibility_inbox_reject',  [__CLASS__, 'ajax_reject']);
-    add_action('wp_ajax_visibility_inbox_history', [__CLASS__, 'ajax_history']);
-
     add_action(self::CRON_HOOK, [__CLASS__, 'run_cron_tick']);
   }
 
@@ -54,160 +47,6 @@ class Visibility_Requests {
     return $schedules;
   }
 
-  public static function register_menus() {
-    // Approvals + Activity live as submenus under the top-level
-    // `visibility` menu registered by Visibility_Settings. Only shown
-    // once the site is paired — before that the Connection screen is
-    // all there is to do.
-    if (!Visibility_Client::is_paired()) {
-      return;
-    }
-    $pending = self::cached_pending_count();
-    $label = $pending > 0
-      ? sprintf(
-          /* translators: %s: pending count badge */
-          __('Approvals %s', 'agentic-seo-visibility'),
-          '<span class="awaiting-mod">' . number_format_i18n($pending) . '</span>'
-        )
-      : __('Approvals', 'agentic-seo-visibility');
-
-    add_submenu_page(
-      'visibility',
-      __('Agentic SEO — Approvals', 'agentic-seo-visibility'),
-      $label,
-      'manage_options',
-      'visibility-inbox',
-      [__CLASS__, 'render_inbox_page']
-    );
-
-    add_submenu_page(
-      'visibility',
-      __('Agentic SEO — Activity', 'agentic-seo-visibility'),
-      __('Activity', 'agentic-seo-visibility'),
-      'manage_options',
-      'visibility-activity',
-      [__CLASS__, 'render_activity_page']
-    );
-  }
-
-  public static function enqueue_assets($hook) {
-    // Hook suffixes for submenus under the top-level `visibility` menu.
-    if (!in_array($hook, [
-      'visibility_page_visibility-inbox',
-      'visibility_page_visibility-activity',
-    ], true)) {
-      return;
-    }
-    wp_enqueue_style(
-      'visibility-admin',
-      plugins_url('assets/css/visibility-admin.css', VISIBILITY_PLUGIN_FILE),
-      [],
-      VISIBILITY_PLUGIN_VERSION
-    );
-    wp_enqueue_script(
-      'visibility-inbox',
-      plugins_url('assets/js/visibility-inbox.js', VISIBILITY_PLUGIN_FILE),
-      ['wp-i18n'],
-      VISIBILITY_PLUGIN_VERSION,
-      true
-    );
-    wp_localize_script('visibility-inbox', 'VisibilityInbox', [
-      'ajaxUrl' => admin_url('admin-ajax.php'),
-      'nonce'   => wp_create_nonce('visibility_inbox'),
-    ]);
-  }
-
-  // ─── Page renderers ────────────────────────────────────────────────────
-
-  public static function render_inbox_page() {
-    if (!current_user_can('manage_options')) {
-      wp_die(esc_html__('Insufficient permissions.', 'agentic-seo-visibility'));
-    }
-    require VISIBILITY_PLUGIN_DIR . 'views/admin-inbox.php';
-  }
-
-  public static function render_activity_page() {
-    if (!current_user_can('manage_options')) {
-      wp_die(esc_html__('Insufficient permissions.', 'agentic-seo-visibility'));
-    }
-    require VISIBILITY_PLUGIN_DIR . 'views/admin-activity.php';
-  }
-
-  // ─── AJAX handlers ─────────────────────────────────────────────────────
-
-  /** Capability gate. Call AFTER an inline check_ajax_referer() so the
-   *  nonce verification is visible to static analysis in each handler. */
-  private static function require_admin() {
-    if (!current_user_can('manage_options')) {
-      wp_send_json_error(['message' => __('Insufficient permissions.', 'agentic-seo-visibility')], 403);
-    }
-  }
-
-  public static function ajax_fetch() {
-    check_ajax_referer('visibility_inbox');
-    self::require_admin();
-    $rows = Visibility_Client::inbox();
-    if (is_wp_error($rows)) {
-      wp_send_json_error(['message' => $rows->get_error_message()], 502);
-    }
-    if (!is_array($rows)) {
-      $rows = [];
-    }
-    foreach ($rows as $row) {
-      Visibility_Client::remember_site_id_from($row);
-    }
-    set_transient('visibility_pending_count', count(array_filter($rows, function ($r) {
-      return isset($r['status']) && $r['status'] === 'pending';
-    })), 5 * MINUTE_IN_SECONDS);
-    wp_send_json_success(['rows' => $rows]);
-  }
-
-  public static function ajax_history() {
-    check_ajax_referer('visibility_inbox');
-    self::require_admin();
-    $status = isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : 'any';
-    $rows = Visibility_Client::history($status, 100);
-    if (is_wp_error($rows)) {
-      wp_send_json_error(['message' => $rows->get_error_message()], 502);
-    }
-    wp_send_json_success(['rows' => is_array($rows) ? $rows : []]);
-  }
-
-  public static function ajax_approve() {
-    check_ajax_referer('visibility_inbox');
-    self::require_admin();
-    $id   = isset($_POST['requestId']) ? sanitize_text_field(wp_unslash($_POST['requestId'])) : '';
-    $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : null;
-    if ($id === '') {
-      wp_send_json_error(['message' => __('Missing request ID.', 'agentic-seo-visibility')], 400);
-    }
-    $row = Visibility_Client::approve($id, $note);
-    if (is_wp_error($row)) {
-      wp_send_json_error(['message' => $row->get_error_message()], 502);
-    }
-    // Execute locally now that the request is approved.
-    $action_type = isset($row['actionType']) ? $row['actionType'] : '';
-    $payload = isset($row['actionPayload']) && is_array($row['actionPayload']) ? $row['actionPayload'] : [];
-    list($ok, $result, $err) = Visibility_Executor::execute($action_type, $payload);
-    Visibility_Client::report_execution($id, $ok, $result, $err);
-    wp_send_json_success(['ok' => $ok, 'result' => $result, 'error' => $err]);
-  }
-
-  public static function ajax_reject() {
-    check_ajax_referer('visibility_inbox');
-    self::require_admin();
-    $id   = isset($_POST['requestId']) ? sanitize_text_field(wp_unslash($_POST['requestId'])) : '';
-    $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
-    if ($id === '' || $note === '') {
-      wp_send_json_error(['message' => __('Request ID and rejection note are required.', 'agentic-seo-visibility')], 400);
-    }
-    $row = Visibility_Client::reject($id, $note);
-    if (is_wp_error($row)) {
-      wp_send_json_error(['message' => $row->get_error_message()], 502);
-    }
-    wp_send_json_success(['row' => $row]);
-  }
-
   // ─── Cron tick ─────────────────────────────────────────────────────────
 
   public static function run_cron_tick() {
@@ -225,11 +64,4 @@ class Visibility_Requests {
     }
   }
 
-  // ─── Pending-count cache for the menu badge ────────────────────────────
-
-  public static function cached_pending_count() {
-    $cached = get_transient('visibility_pending_count');
-    if ($cached === false) return 0;
-    return (int) $cached;
-  }
 }

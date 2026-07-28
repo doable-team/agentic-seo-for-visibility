@@ -252,7 +252,9 @@ class Visibility_REST {
     $search  = (string) ($request->get_param('search') ?? '');
     $statusParam = $request->get_param('status');
     $statuses = self::ALLOWED_STATUSES;
-    if (is_string($statusParam) && $statusParam !== '') {
+    // 'any' is WordPress's own spelling for "every status" — honour it rather
+    // than letting it intersect to nothing and collapse to publish-only.
+    if (is_string($statusParam) && $statusParam !== '' && $statusParam !== 'any') {
       $requested = array_map('sanitize_key', array_map('trim', explode(',', $statusParam)));
       $statuses  = array_values(array_intersect(self::ALLOWED_STATUSES, $requested));
       if (empty($statuses)) $statuses = ['publish'];
