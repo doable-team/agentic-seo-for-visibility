@@ -10,6 +10,10 @@ on:
       tag:
         description: "Existing git tag to publish (e.g. v0.9.1)"
         required: true
+      dry_run:
+        description: "Validate everything but do NOT commit to WordPress.org"
+        type: boolean
+        default: true
 
 concurrency:
   group: wporg-publish
@@ -21,6 +25,8 @@ jobs:
     env:
       SLUG: agentic-seo-visibility
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      # Empty for `release` events, so a real release always publishes.
+      DRY: ${{ inputs.dry_run }}
 
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +60,19 @@ jobs:
           [ "$H" = "$S" ] || { echo "::error::Plugin header ($H) != readme Stable tag ($S)"; exit 1; }
           [ "v$H" = "$TAG" ] || { echo "::error::Git tag ($TAG) != plugin version (v$H)"; exit 1; }
 
+      # Presence only — never printed. Catches the most common setup mistake:
+      # the workflow wired up before the secrets exist, which would otherwise
+      # only surface as an opaque SVN auth failure at the very last step.
+      - name: Secrets must be present
+        env:
+          SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "${SVN_USERNAME:-}" ] || { echo "::error::WPORG_SVN_USERNAME is not set"; exit 1; }
+          [ -n "${SVN_PASSWORD:-}" ] || { echo "::error::WPORG_SVN_PASSWORD is not set"; exit 1; }
+          echo "Both secrets are present (username is ${#SVN_USERNAME} chars, password ${#SVN_PASSWORD} chars)."
+
       - name: Install Subversion
         run: sudo apt-get update -qq && sudo apt-get install -y -qq subversion
 
@@ -62,8 +81,14 @@ jobs:
           set -euo pipefail
           V='${{ steps.v.outputs.header }}'
           if svn ls "https://plugins.svn.wordpress.org/$SLUG/tags/$V" >/dev/null 2>&1; then
-            echo "::error::tags/$V already exists on WordPress.org. Bump the version."
-            exit 1
+            if [ "${DRY:-}" = "true" ]; then
+              echo "::warning::tags/$V already exists on w.org — a real run would stop here. Continuing because this is a dry run."
+            else
+              echo "::error::tags/$V already exists on WordPress.org. Bump the version."
+              exit 1
+            fi
+          else
+            echo "tags/$V is free."
           fi
 
       - name: Check out WordPress.org
@@ -92,7 +117,23 @@ jobs:
           cd wporg
           svn cp trunk "tags/${{ steps.v.outputs.header }}"
 
+      - name: Dry run — stop before publishing
+        if: env.DRY == 'true'
+        run: |
+          {
+            echo "### Dry run — nothing was published"
+            echo ""
+            echo "Validated: version agreement, secrets present, w.org checkout,"
+            echo "trunk sync (adds/deletes) and tag creation — all locally."
+            echo ""
+            echo "**Not** validated: the authenticated \`svn ci\`. WordPress.org SVN is"
+            echo "publicly readable, so write credentials cannot be probed without"
+            echo "actually writing. That step is first exercised on a real release."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Dry run complete — no commit made."
+
       - name: Commit
+        if: env.DRY != 'true'
         env:
           SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
           SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
@@ -105,6 +146,7 @@ jobs:
             -m "Release ${{ steps.v.outputs.header }}"
 
       - name: Confirm it landed
+        if: env.DRY != 'true'
         run: |
           set -euo pipefail
           V='${{ steps.v.outputs.header }}'
