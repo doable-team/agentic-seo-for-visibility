@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.8.0
+Stable tag: 0.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,21 @@ Service URL: https://v2.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.9.0 =
+* **SEO tags now work without an SEO plugin.** WordPress itself has no meta
+  description and no Open Graph tags, so on a site without Yoast, Rank Math or
+  All in One SEO the SEO fields written for a post previously had nowhere to go
+  -- the plugin refused the action outright. It now stores them and outputs
+  them itself: meta description, Open Graph, canonical, robots and structured
+  data.
+* Install an SEO plugin at any time and Visibility hands the tags straight over
+  -- it stops emitting its own so nothing is ever duplicated, and nothing you
+  have already written is lost.
+* The Connection screen now tells you which of the two is happening, instead of
+  leaving you to guess whether your SEO fields do anything.
+* Fixed: structured data (JSON-LD) written for a post was stored but never
+  rendered on the page. It is now output.
 
 = 0.8.0 =
 * Removed the **Approvals** and **Activity** screens from WP admin.
