@@ -3,7 +3,7 @@
  * Plugin Name: Agentic SEO for Visibility
  * Plugin URI: https://v2.visibility.so
  * Description: Connect your WordPress site to the Visibility service at https://v2.visibility.so so AI agents in your Visibility project can audit and publish content directly. Every write action is gated by an approval inbox inside WP admin — pair once with a short code, then review what the AI wants to do before it happens.
- * Version: 0.8.0
+ * Version: 0.9.0
  * Author: rankth
  * Author URI: https://visibility.so
  * License: GPL v2 or later
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
   exit;
 }
 
-define('VISIBILITY_PLUGIN_VERSION', '0.8.0');
+define('VISIBILITY_PLUGIN_VERSION', '0.9.0');
 define('VISIBILITY_PLUGIN_FILE', __FILE__);
 define('VISIBILITY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
@@ -31,11 +31,14 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-settings.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-rest.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-executor.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-requests.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-head.php';
 
 add_action('plugins_loaded', function () {
   new Visibility_Settings();
   new Visibility_REST();
   Visibility_Requests::init();
+  // Emits SEO tags itself while no SEO plugin is installed; silent once one is.
+  Visibility_SEO_Head::init();
 });
 
 // Register the 5-minute schedule the action-request cron uses.

@@ -12,7 +12,7 @@ Pair WordPress with your Visibility project so AI agents can audit and publish c
 
 == Description ==
 
-**Agentic SEO for Visibility** is the official WordPress plugin for [Visibility](https://v2.visibility.so), a SaaS platform that runs AI agents to audit websites, generate SEO-optimised content, and publish it directly to WordPress. Pair your site with your Visibility project in under a minute using a short code — no Application Passwords, no per-user API keys, and no copy-pasting drafts out of an AI tool.
+**Agentic SEO for Visibility** is the official WordPress plugin for [Visibility](https://visibility.so), a SaaS platform that runs AI agents to audit websites, generate SEO-optimised content, and publish it directly to WordPress. Pair your site with your Visibility project in under a minute using a short code — no Application Passwords, no per-user API keys, and no copy-pasting drafts out of an AI tool.
 
 = Why use this plugin =
 

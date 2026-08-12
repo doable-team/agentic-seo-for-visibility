@@ -149,6 +149,39 @@ class Visibility_Settings {
         <div class="notice notice-error"><p><?php echo esc_html($error_msg ?: __('Pairing failed.', 'agentic-seo-visibility')); ?></p></div>
       <?php endif; ?>
 
+      <?php
+      // Where this site's SEO tags come from. WordPress core has no meta
+      // description and no Open Graph at all, so without an SEO plugin the
+      // fields agents write would have nowhere to go — we render them
+      // ourselves instead, and stand down the moment a real one is installed.
+      $seo_plugin = Visibility_SEO_Head::no_seo_plugin_active() ? null
+        : (defined('WPSEO_VERSION') ? 'Yoast SEO'
+          : (defined('RANK_MATH_VERSION') ? 'Rank Math' : 'All in One SEO'));
+      ?>
+      <?php if ($seo_plugin === null) : ?>
+        <div class="notice notice-warning">
+          <p>
+            <strong><?php echo esc_html__('No SEO plugin detected.', 'agentic-seo-visibility'); ?></strong>
+            <?php echo esc_html__('Visibility is emitting the SEO tags for your posts directly — meta description, Open Graph, canonical and structured data.', 'agentic-seo-visibility'); ?>
+          </p>
+          <p>
+            <?php echo esc_html__('That covers the basics, but a dedicated SEO plugin gives you sitemaps, redirects, schema controls and the ability to edit these fields alongside your other posts. Install Yoast SEO, Rank Math or All in One SEO and Visibility will hand the tags over automatically — nothing you have written is lost.', 'agentic-seo-visibility'); ?>
+          </p>
+        </div>
+      <?php else : ?>
+        <div class="notice notice-info">
+          <p>
+            <?php
+            printf(
+              /* translators: %s: the active SEO plugin's name. */
+              esc_html__('SEO tags are managed by %s. Visibility writes each post\'s title, description, focus keyword and social tags into it, and does not emit any tags of its own.', 'agentic-seo-visibility'),
+              '<strong>' . esc_html($seo_plugin) . '</strong>'
+            );
+            ?>
+          </p>
+        </div>
+      <?php endif; ?>
+
       <div style="background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:24px 28px">
         <?php if ($paired) : ?>
           <h2 style="margin-top:0;display:flex;align-items:center;gap:8px;font-size:16px">

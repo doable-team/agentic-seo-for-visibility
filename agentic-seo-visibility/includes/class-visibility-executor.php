@@ -420,13 +420,21 @@ class Visibility_Executor {
   }
 
   private static function exec_seo_meta_update($payload) {
-    $plugin = self::detect_seo_plugin();
-    if (!$plugin) {
-      return [false, null, 'No supported SEO plugin (Yoast/Rank Math/AIO SEO) is active. Install one to use SEO actions.'];
-    }
     $post_id = intval($payload['postId'] ?? 0);
     if (!$post_id) return [false, null, 'postId required'];
     $fields = $payload['fields'] ?? [];
+
+    $plugin = self::detect_seo_plugin();
+    if (!$plugin) {
+      // No SEO plugin: store under our own keys and render them ourselves from
+      // `Visibility_SEO_Head`. This used to hard-fail, which meant a site
+      // without Yoast/Rank Math/AIO SEO silently got no meta description, no
+      // Open Graph and no canonical — WordPress core emits none of those. The
+      // fields are kept verbatim so that installing a real SEO plugin later is
+      // a clean handover: our renderer stands down, and nothing was lost.
+      return self::store_seo_meta_fallback($post_id, $fields);
+    }
+
     $keys = self::seo_meta_keys($plugin);
     foreach ($fields as $key => $value) {
       if (!isset($keys[$key])) continue;
@@ -453,6 +461,40 @@ class Visibility_Executor {
       update_post_meta($post_id, $meta_key, is_scalar($value) ? sanitize_text_field((string) $value) : $value);
     }
     return [true, ['postId' => $post_id, 'seoPlugin' => $plugin], null];
+  }
+
+  /**
+   * Persist SEO fields under Visibility's own keys (no SEO plugin installed).
+   *
+   * `Visibility_SEO_Head` renders these into <head>, and only while no SEO
+   * plugin is active — so this never competes with Yoast/Rank Math/AIO SEO.
+   */
+  private static function store_seo_meta_fallback($post_id, $fields) {
+    if (!class_exists('Visibility_SEO_Head')) {
+      return [false, null, 'Visibility SEO renderer not loaded.'];
+    }
+    $keys = Visibility_SEO_Head::KEYS;
+    $written = [];
+    foreach ($fields as $key => $value) {
+      if ($key === 'schemaJsonLd') {
+        update_post_meta($post_id, '_visibility_schema_jsonld', wp_json_encode($value));
+        $written[] = $key;
+        continue;
+      }
+      if (!isset($keys[$key])) continue;
+      if ($key === 'robotsNoindex' || $key === 'robotsNofollow') {
+        update_post_meta($post_id, $keys[$key], $value ? '1' : '');
+      } else {
+        update_post_meta($post_id, $keys[$key], is_scalar($value) ? sanitize_text_field((string) $value) : $value);
+      }
+      $written[] = $key;
+    }
+    return [true, [
+      'postId'     => $post_id,
+      'seoPlugin'  => null,
+      'renderedBy' => 'visibility',
+      'fields'     => $written,
+    ], null];
   }
 
   // ─── Redirects ─────────────────────────────────────────────────────────
