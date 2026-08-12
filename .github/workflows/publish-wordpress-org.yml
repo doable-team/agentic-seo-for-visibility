@@ -1,0 +1,114 @@
+name: Publish to WordPress.org
+
+# Fires only when a GitHub release is published -- never on an ordinary push.
+# `workflow_dispatch` is the manual escape hatch for re-running a release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to publish (e.g. v0.9.1)"
+        required: true
+
+concurrency:
+  group: wporg-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      SLUG: agentic-seo-visibility
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      # ---- Guards -------------------------------------------------------
+      # Every one of these is a mistake that has actually happened by hand:
+      # a tag that disagrees with the plugin header, a readme Stable tag left
+      # on the previous version, or re-publishing a version already on w.org.
+
+      - name: Read versions
+        id: v
+        run: |
+          set -euo pipefail
+          HEADER=$(grep -oP '^\s*\*\s*Version:\s*\K[0-9][0-9.]*' "$SLUG/$SLUG.php")
+          CONST=$(grep -oP "VISIBILITY_PLUGIN_VERSION',\s*'\K[0-9][0-9.]*" "$SLUG/$SLUG.php")
+          STABLE=$(grep -oP '^Stable tag:\s*\K[0-9][0-9.]*' "$SLUG/readme.txt")
+          echo "header=$HEADER" >> "$GITHUB_OUTPUT"
+          echo "const=$CONST"   >> "$GITHUB_OUTPUT"
+          echo "stable=$STABLE" >> "$GITHUB_OUTPUT"
+          echo "Plugin header: $HEADER | constant: $CONST | Stable tag: $STABLE | git tag: $TAG"
+
+      - name: Versions must agree
+        run: |
+          set -euo pipefail
+          H='${{ steps.v.outputs.header }}'
+          C='${{ steps.v.outputs.const }}'
+          S='${{ steps.v.outputs.stable }}'
+          [ "$H" = "$C" ] || { echo "::error::Plugin header ($H) != VISIBILITY_PLUGIN_VERSION ($C)"; exit 1; }
+          [ "$H" = "$S" ] || { echo "::error::Plugin header ($H) != readme Stable tag ($S)"; exit 1; }
+          [ "v$H" = "$TAG" ] || { echo "::error::Git tag ($TAG) != plugin version (v$H)"; exit 1; }
+
+      - name: Install Subversion
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq subversion
+
+      - name: Refuse to overwrite an existing w.org tag
+        run: |
+          set -euo pipefail
+          V='${{ steps.v.outputs.header }}'
+          if svn ls "https://plugins.svn.wordpress.org/$SLUG/tags/$V" >/dev/null 2>&1; then
+            echo "::error::tags/$V already exists on WordPress.org. Bump the version."
+            exit 1
+          fi
+
+      - name: Check out WordPress.org
+        run: |
+          set -euo pipefail
+          svn co --depth immediates "https://plugins.svn.wordpress.org/$SLUG" wporg
+          svn up --set-depth infinity wporg/trunk
+
+      # `--delete` matters: without it, files removed from the plugin stay in
+      # trunk and get shipped again. That is exactly how the 0.8.0-removed
+      # admin screens nearly went back out in 0.9.1.
+      - name: Sync trunk
+        run: |
+          set -euo pipefail
+          rsync -a --delete \
+            --exclude '.svn' --exclude '.git' --exclude '.github' --exclude '.distignore' \
+            "$SLUG/" wporg/trunk/
+          cd wporg
+          svn add --force trunk --auto-props --parents --depth infinity -q || true
+          svn status trunk | grep '^!' | awk '{print $2}' | xargs -r svn rm --force
+          svn status trunk
+
+      - name: Create the tag
+        run: |
+          set -euo pipefail
+          cd wporg
+          svn cp trunk "tags/${{ steps.v.outputs.header }}"
+
+      - name: Commit
+        env:
+          SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd wporg
+          printf '%s' "$SVN_PASSWORD" | svn ci \
+            --username "$SVN_USERNAME" --password-from-stdin \
+            --no-auth-cache --non-interactive \
+            -m "Release ${{ steps.v.outputs.header }}"
+
+      - name: Confirm it landed
+        run: |
+          set -euo pipefail
+          V='${{ steps.v.outputs.header }}'
+          svn ls "https://plugins.svn.wordpress.org/$SLUG/tags/$V" >/dev/null
+          PUBLISHED=$(svn cat "https://plugins.svn.wordpress.org/$SLUG/trunk/readme.txt" | grep -oP '^Stable tag:\s*\K[0-9][0-9.]*')
+          [ "$PUBLISHED" = "$V" ] || { echo "::error::w.org Stable tag is $PUBLISHED, expected $V"; exit 1; }
+          echo "Published $V to WordPress.org."
