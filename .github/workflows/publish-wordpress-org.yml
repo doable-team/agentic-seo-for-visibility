@@ -108,7 +108,9 @@ jobs:
             "$SLUG/" wporg/trunk/
           cd wporg
           svn add --force trunk --auto-props --parents --depth infinity -q || true
-          svn status trunk | grep '^!' | awk '{print $2}' | xargs -r svn rm --force
+          # `grep` exits 1 when nothing is missing, which is the normal case --
+          # under `pipefail` that would fail the whole step, so swallow it.
+          svn status trunk | { grep '^!' || true; } | awk '{print $2}' | xargs -r svn rm --force
           svn status trunk
 
       - name: Create the tag
