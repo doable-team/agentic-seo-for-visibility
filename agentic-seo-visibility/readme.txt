@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.9.0
+Stable tag: 0.9.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,6 +107,13 @@ Service URL: https://v2.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.9.1 =
+* Fixed the Connection screen layout. WordPress moves admin notices to sit
+  directly after the first heading unless the page marks where the header
+  ends, and ours sits in a flex row -- so the notice landed beside the logo
+  and squeezed the title into a narrow column. 0.9.0 made this permanent by
+  always showing a notice; it is now placed correctly.
 
 = 0.9.0 =
 * **SEO tags now work without an SEO plugin.** WordPress itself has no meta

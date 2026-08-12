@@ -140,6 +140,14 @@ class Visibility_Settings {
       <p class="description" style="margin-bottom:24px">
         <?php echo esc_html__('Connect this WordPress site to your Visibility project so your agents can publish here.', 'agentic-seo-visibility'); ?>
       </p>
+      <?php
+      // Admin JS relocates every `.notice` to sit directly after the first
+      // <h1> unless it finds `wp-header-end` — and our <h1> lives inside a
+      // flex row, so without this the notice becomes a flex sibling of the
+      // logo and squeezes the title into a narrow column. Core styles this
+      // element invisible; it exists purely to mark where notices belong.
+      ?>
+      <hr class="wp-header-end"/>
 
       <?php if ($status === 'paired') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Connected to Visibility.', 'agentic-seo-visibility'); ?></p></div>
