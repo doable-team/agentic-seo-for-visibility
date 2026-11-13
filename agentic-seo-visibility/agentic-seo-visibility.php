@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Agentic SEO for Visibility
- * Plugin URI: https://v2.visibility.so
- * Description: Connect your WordPress site to the Visibility service at https://v2.visibility.so so AI agents in your Visibility project can audit and publish content directly. Every write action is gated by an approval inbox inside WP admin — pair once with a short code, then review what the AI wants to do before it happens.
+ * Plugin URI: https://visibility.so
+ * Description: Connect your WordPress site to Visibility (https://app.visibility.so) so the AI agents in your Visibility project can read, draft and improve your content. Pair once with a short code; every publish and every change to a live page is approved by a person in Visibility first.
  * Version: 0.9.1
  * Author: rankth
  * Author URI: https://visibility.so
@@ -21,9 +21,12 @@ define('VISIBILITY_PLUGIN_FILE', __FILE__);
 define('VISIBILITY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
 // Server URL is filterable so we can point a staging plugin install at a
-// non-prod backend without forking the code. Defaults to production.
+// non-prod backend without forking the code. Defaults to production. This must
+// be the final address: WordPress's HTTP client can turn a POST into a GET when
+// it follows a 301/302, so a redirecting base silently breaks pairing and
+// result reports.
 function visibility_api_base_url() {
-  return apply_filters('visibility_api_base_url', 'https://v2.visibility.so');
+  return untrailingslashit(apply_filters('visibility_api_base_url', 'https://app.visibility.so'));
 }
 
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-client.php';
