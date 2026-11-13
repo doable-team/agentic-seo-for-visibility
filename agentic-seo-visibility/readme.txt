@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.9.1
+Stable tag: 0.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,6 +113,45 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.10.0 =
+* **Agents can read a page before they change it.** The plugin now returns a
+  post or page with its SEO fields (as stored and as the page shows them),
+  editor, page builder, block structure, images and categories, so every
+  approval in Visibility can show before and after. Pages and other public
+  content types can be listed and read too.
+* **New: what this site has.** Visibility can ask which SEO plugin, page
+  builder, cache and language plugins the site uses, which content types it
+  has, and whether publishing is on, so agents only offer what works here.
+* **SEO fields land where your SEO plugin reads them.** Yoast SEO, Rank Math
+  and All in One SEO now get title, description, focus keyphrase, canonical,
+  noindex/nofollow, Open Graph and Twitter fields, primary category and
+  cornerstone, plus category and tag SEO (Yoast, Rank Math). Each change is
+  read back, fields a plugin cannot take are reported instead of skipped,
+  and Yoast changes show without re-saving the post.
+* Fixed: on All in One SEO sites new titles and descriptions were saved
+  where All in One SEO never reads them, so nothing changed on the page.
+* Fixed: structured data was dropped on Yoast, Rank Math and All in One SEO
+  sites. It is now added to the SEO plugin's own schema, once.
+* Fixed: editing part of an existing page removed YouTube embeds, forms,
+  scripts and similar code elsewhere on the page.
+* Fixed: an approved change could run twice (for example two drafts) when
+  reporting the result to Visibility failed. Each approved change now runs
+  exactly once.
+* Fixed: "Add internal links" never added a link but reported success. Links
+  are now added in the text only, never inside headings, existing links or
+  code, and the action says when nothing could be linked.
+* The plugin itself now refuses publishing when it is turned off for the
+  site, and every change while Visibility is paused for the site.
+* A change is refused if the page was edited after the agent read it.
+* Images are copied into the media library with alt text, title, caption and
+  a readable file name, attached to their post, and uploaded only once.
+* On sites with SEOPress, The SEO Framework or Slim SEO the plugin no longer
+  prints its own SEO tags next to theirs. Without an SEO plugin it now also
+  prints the SEO title, Twitter tags and category/tag SEO.
+* Deleting the plugin removes its connection key, settings and scheduled
+  tasks.
+* Talks to app.visibility.so directly instead of through a redirect.
 
 = 0.9.1 =
 * Fixed the Connection screen layout. WordPress moves admin notices to sit

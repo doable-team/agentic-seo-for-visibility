@@ -1,7 +1,7 @@
 #!/bin/bash
 # #284 rich read (+ the list part of #283) and T12's "stale modifiedGmt -> conflict".
 cd "$(dirname "$0")"; . ./lib.sh
-S=1
+S=${SITE:-1}
 HTML='<!-- wp:heading -->
 <h2>Intro</h2>
 <!-- /wp:heading -->
@@ -38,11 +38,11 @@ R2=$(api $S GET "/posts/$ID"); check "$(echo "$R2" | jget "'blocks' in d")" "Fal
 L=$(api $S GET "/posts?type=page&parent=$PARENT&status=any")
 check "$(echo "$L" | jget "list(x['id'] for x in d['items'])")" "[$ID]" "list type=page&parent="
 check "$(echo "$L" | jget "['items'][0]['type']")" "page" "list items carry type"
-check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:8091/wp-json/visibility/v1/posts?type=nav_menu_item")" "400" "non-public type -> 400"
-check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:8091/wp-json/visibility/v1/posts?type=nope")" "400" "unknown type -> 400"
+check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:809$S/wp-json/visibility/v1/posts?type=nav_menu_item")" "400" "non-public type -> 400"
+check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:809$S/wp-json/visibility/v1/posts?type=nope")" "400" "unknown type -> 400"
 # Optimistic lock: someone edits after the read.
 sleep 1; $WP $S post update $ID --post_title="Edited by a person" >/dev/null
-CODE=$(curl -s -o /tmp/conf.json -w '%{http_code}' -X PATCH -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' --data "{\"title\":\"Agent title\",\"modifiedGmt\":\"$MOD\"}" http://localhost:8091/wp-json/visibility/v1/posts/$ID)
+CODE=$(curl -s -o /tmp/conf.json -w '%{http_code}' -X PATCH -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' --data "{\"title\":\"Agent title\",\"modifiedGmt\":\"$MOD\"}" http://localhost:809$S/wp-json/visibility/v1/posts/$ID)
 check "$CODE" "409" "PATCH with stale modifiedGmt -> 409"
 check "$(jget "['code']" < /tmp/conf.json)" "visibility_conflict" "code visibility_conflict"
 R3=$(action $S page.update_content "{\"postId\":$ID,\"modifiedGmt\":\"$MOD\",\"fields\":{\"title\":\"Agent title\"}}")

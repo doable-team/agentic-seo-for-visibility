@@ -3,7 +3,7 @@
 # existing link, heading or code; reports an error (and saves nothing) when
 # no link could be added.
 cd "$(dirname "$0")"; . ./lib.sh
-S=1
+S=${SITE:-1}
 TGT=$($WP $S post create --post_status=publish --post_title="Target $RANDOM" --porcelain | tr -d '\r' | tail -1)
 URL=$($WP $S post url $TGT)
 HTML='<!-- wp:heading -->

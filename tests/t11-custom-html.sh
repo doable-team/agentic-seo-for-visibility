@@ -2,7 +2,7 @@
 # T11 / #276: editing one block must leave a Custom HTML block (iframe, form,
 # script) byte-identical.
 cd "$(dirname "$0")"; . ./lib.sh
-S=1
+S=${SITE:-1}
 HTML='<!-- wp:paragraph -->
 <p>First paragraph.</p>
 <!-- /wp:paragraph -->

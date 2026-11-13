@@ -9,6 +9,10 @@ in the plugin zip). Each site exposes the plugin with a fixed test token:
 | 2 | http://localhost:8092 | `vis-test-token-2` | Twenty Twenty-One + Classic Editor + Yoast SEO |
 | 3 | http://localhost:8093 | `vis-test-token-3` | Twenty Twenty-Five + Rank Math |
 | 4 | http://localhost:8094 | `vis-test-token-4` | Twenty Twenty-Five + All in One SEO |
+| 5 | http://localhost:8095 | `vis-test-token-5` | PHP 7.4 + WordPress 6.1, no SEO plugin |
+
+Most single-site checks take `SITE=N` (default 1); `t3-schema.sh` and
+`t-seo-adapters.sh` take `SITES="1 2"`.
 
 `lib.sh` expects a `wp.sh <site> <wp-cli args>` wrapper (path in `WP`) that
 runs WP-CLI against the site, and the plugin copied into each site.
