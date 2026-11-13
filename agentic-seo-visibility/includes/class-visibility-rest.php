@@ -297,7 +297,7 @@ class Visibility_REST {
   public function create_post(WP_REST_Request $request) {
     $params = $request->get_json_params() ?: [];
     $args = $this->build_post_args($params, ['post_status' => 'draft']);
-    $post_id = wp_insert_post($args, true);
+    $post_id = Visibility_Content::save($args);
     if (is_wp_error($post_id)) {
       return $post_id;
     }
@@ -308,13 +308,14 @@ class Visibility_REST {
 
   public function update_post(WP_REST_Request $request) {
     $id = (int) $request['id'];
-    if (!get_post($id)) {
+    $existing = get_post($id);
+    if (!$existing) {
       return new WP_Error('visibility_no_post', __('Post not found.', 'agentic-seo-visibility'), ['status' => 404]);
     }
     $params = $request->get_json_params() ?: [];
-    $args   = $this->build_post_args($params, ['ID' => $id]);
+    $args   = $this->build_post_args($params, ['ID' => $id], $existing);
     $args['ID'] = $id;
-    $updated = wp_update_post($args, true);
+    $updated = Visibility_Content::save($args);
     if (is_wp_error($updated)) {
       return $updated;
     }
@@ -341,12 +342,18 @@ class Visibility_REST {
     ]);
   }
 
-  /** Shared arg-building helper for create + update. */
-  private function build_post_args(array $params, array $base): array {
+  /**
+   * Shared arg-building helper for create + update.
+   *
+   * On update only the markup that is new gets sanitised; everything already
+   * on the page (embeds, forms, scripts in Custom HTML blocks) is kept as is.
+   */
+  private function build_post_args(array $params, array $base, $existing = null): array {
     $args = $base;
-    if (isset($params['title']))   $args['post_title']   = wp_kses_post((string) $params['title']);
-    if (isset($params['content'])) $args['post_content'] = wp_kses_post((string) $params['content']);
-    if (isset($params['excerpt'])) $args['post_excerpt'] = wp_kses_post((string) $params['excerpt']);
+    $old  = $existing ? $existing : null;
+    if (isset($params['title']))   $args['post_title']   = Visibility_Content::sanitize_update((string) $params['title'], $old ? $old->post_title : '');
+    if (isset($params['content'])) $args['post_content'] = Visibility_Content::sanitize_update((string) $params['content'], $old ? $old->post_content : '');
+    if (isset($params['excerpt'])) $args['post_excerpt'] = Visibility_Content::sanitize_update((string) $params['excerpt'], $old ? $old->post_excerpt : '');
     if (isset($params['slug']))    $args['post_name']    = sanitize_title((string) $params['slug']);
     if (isset($params['status'])) {
       $status = sanitize_key((string) $params['status']);

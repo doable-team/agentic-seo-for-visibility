@@ -71,16 +71,18 @@ class Visibility_Executor {
     $args = [
       'post_type'     => $post_type,
       'post_status'   => 'draft',
-      'post_title'    => isset($payload['title']) ? wp_kses_post($payload['title']) : '',
-      'post_content'  => isset($payload['content']) ? wp_kses_post($payload['content']) : '',
+      'post_title'    => isset($payload['title']) ? wp_kses_post((string) $payload['title']) : '',
+      'post_content'  => isset($payload['content']) ? wp_kses_post((string) $payload['content']) : '',
     ];
     if (!empty($payload['excerpt'])) {
-      $args['post_excerpt'] = wp_kses_post($payload['excerpt']);
+      $args['post_excerpt'] = wp_kses_post((string) $payload['excerpt']);
     }
     if (!empty($payload['slug'])) {
       $args['post_name'] = sanitize_title($payload['slug']);
     }
-    $post_id = wp_insert_post($args, true);
+    // Sanitised above; save() keeps WordPress from running kses a second time
+    // and from unslashing block attributes.
+    $post_id = Visibility_Content::save($args);
     if (is_wp_error($post_id)) {
       return [false, null, $post_id->get_error_message()];
     }
@@ -106,13 +108,17 @@ class Visibility_Executor {
   private static function exec_post_update_content($payload) {
     $post_id = intval($payload['postId'] ?? 0);
     if (!$post_id) return [false, null, 'postId required'];
+    $post = get_post($post_id);
+    if (!$post) return [false, null, 'post not found'];
     $fields = $payload['fields'] ?? [];
     $args = ['ID' => $post_id];
-    if (array_key_exists('title', $fields))   $args['post_title'] = wp_kses_post((string) $fields['title']);
-    if (array_key_exists('content', $fields)) $args['post_content'] = wp_kses_post((string) $fields['content']);
-    if (array_key_exists('excerpt', $fields)) $args['post_excerpt'] = wp_kses_post((string) $fields['excerpt']);
+    // Only markup the agent added is sanitised. Re-filtering the whole page
+    // used to strip iframes, forms and scripts the owner had on it.
+    if (array_key_exists('title', $fields))   $args['post_title'] = Visibility_Content::sanitize_update((string) $fields['title'], $post->post_title);
+    if (array_key_exists('content', $fields)) $args['post_content'] = Visibility_Content::sanitize_update((string) $fields['content'], $post->post_content);
+    if (array_key_exists('excerpt', $fields)) $args['post_excerpt'] = Visibility_Content::sanitize_update((string) $fields['excerpt'], $post->post_excerpt);
     if (array_key_exists('slug', $fields))    $args['post_name'] = sanitize_title((string) $fields['slug']);
-    $result = wp_update_post($args, true);
+    $result = Visibility_Content::save($args);
     if (is_wp_error($result)) return [false, null, $result->get_error_message()];
     return [true, self::post_result($post_id), null];
   }

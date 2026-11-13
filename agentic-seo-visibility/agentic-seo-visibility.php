@@ -27,6 +27,7 @@ function visibility_api_base_url() {
 }
 
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-client.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-content.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-settings.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-rest.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-executor.php';
