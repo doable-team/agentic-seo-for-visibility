@@ -512,7 +512,14 @@ class Visibility_REST {
 
   // ── Media ──────────────────────────────────────────────────────────
 
+  /** GET /media?search=&page=&per_page=, or ?id=12,13 to fetch by id (for re-use). */
   public function list_media(WP_REST_Request $request) {
+    $ids = $request->get_param('id');
+    if ($ids !== null && $ids !== '') {
+      $ids = array_values(array_filter(array_map('intval', explode(',', (string) $ids))));
+      $items = array_values(array_filter(array_map(function ($id) { return Visibility_Media::serialize($id); }, $ids)));
+      return rest_ensure_response(['items' => $items, 'page' => 1, 'perPage' => count($ids), 'total' => count($items), 'totalPages' => 1]);
+    }
     $perPage = max(1, min(100, (int) ($request->get_param('per_page') ?? 20)));
     $page    = max(1, (int) ($request->get_param('page') ?? 1));
     $search  = (string) ($request->get_param('search') ?? '');
@@ -525,7 +532,7 @@ class Visibility_REST {
       'orderby'        => 'date',
       'order'          => 'DESC',
     ]);
-    $items = array_map(fn($p) => $this->serialize_media($p->ID), $query->posts);
+    $items = array_map(fn($p) => Visibility_Media::serialize($p->ID), $query->posts);
     return rest_ensure_response([
       'items'      => $items,
       'page'       => $page,
@@ -535,39 +542,25 @@ class Visibility_REST {
     ]);
   }
 
-  /** Upload from a remote URL — simpler than multipart and what most
-   *  agents already produce (images from upstream tools). */
+  /**
+   * POST /media {source_url, title?, alt_text? (or alt), caption?, description?,
+   * filename?, post_id?}: copy an image into the media library (never
+   * hot-linked), attached to post_id. The same source_url is re-used.
+   */
   public function upload_media_from_url(WP_REST_Request $request) {
-    $params = $request->get_json_params() ?: [];
-    $sourceUrl = isset($params['source_url']) ? esc_url_raw((string) $params['source_url']) : '';
-    if ($sourceUrl === '') {
-      return new WP_Error('visibility_no_url', __('source_url is required.', 'agentic-seo-visibility'), ['status' => 400]);
-    }
-    $title = isset($params['title']) ? sanitize_text_field((string) $params['title']) : '';
-    $alt   = isset($params['alt_text']) ? sanitize_text_field((string) $params['alt_text']) : '';
-
-    require_once ABSPATH . 'wp-admin/includes/file.php';
-    require_once ABSPATH . 'wp-admin/includes/media.php';
-    require_once ABSPATH . 'wp-admin/includes/image.php';
-
-    $tmp = download_url($sourceUrl, 30);
-    if (is_wp_error($tmp)) return $tmp;
-
-    $parsed_url = wp_parse_url($sourceUrl);
-    $filename = wp_basename($parsed_url['path'] ?? 'upload.bin');
-    $file_array = [
-      'name'     => $filename,
-      'tmp_name' => $tmp,
+    $p = $request->get_json_params() ?: [];
+    $args = [
+      'source_url' => isset($p['source_url']) ? $p['source_url'] : '',
+      'post_id'    => isset($p['post_id']) ? $p['post_id'] : 0,
     ];
-    $attachment_id = media_handle_sideload($file_array, 0, $title);
-    if (is_wp_error($attachment_id)) {
-      wp_delete_file($tmp);
-      return $attachment_id;
+    foreach (['title', 'caption', 'description', 'filename'] as $k) {
+      if (isset($p[$k]) && is_scalar($p[$k])) $args[$k] = (string) $p[$k];
     }
-    if ($alt !== '') {
-      update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt);
-    }
-    return rest_ensure_response($this->serialize_media($attachment_id));
+    if (isset($p['alt_text']) && is_scalar($p['alt_text'])) $args['alt'] = (string) $p['alt_text'];
+    elseif (isset($p['alt']) && is_scalar($p['alt'])) $args['alt'] = (string) $p['alt'];
+    $res = Visibility_Media::upload($args);
+    if (is_wp_error($res)) return $res;
+    return rest_ensure_response($res);
   }
 
   // ── Serializers ────────────────────────────────────────────────────
@@ -633,17 +626,7 @@ class Visibility_REST {
   }
 
   private function serialize_media($attachment_id) {
-    $post = get_post($attachment_id);
-    if (!$post) return null;
-    return [
-      'id'        => (int) $post->ID,
-      'title'     => $post->post_title,
-      'slug'      => $post->post_name,
-      'mimeType'  => $post->post_mime_type,
-      'url'       => wp_get_attachment_url($post->ID),
-      'altText'   => (string) get_post_meta($post->ID, '_wp_attachment_image_alt', true),
-      'date'      => $this->safe_iso($post->post_date_gmt),
-    ];
+    return Visibility_Media::serialize($attachment_id);
   }
 
   private function safe_iso($mysql_gmt) {

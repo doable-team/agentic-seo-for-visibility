@@ -293,39 +293,14 @@ class Visibility_Executor {
   // ─── Media ─────────────────────────────────────────────────────────────
 
   private static function exec_media_upload_from_url($payload) {
-    $url = $payload['sourceUrl'] ?? '';
-    if (!$url) return [false, null, 'sourceUrl required'];
-    require_once ABSPATH . 'wp-admin/includes/file.php';
-    require_once ABSPATH . 'wp-admin/includes/media.php';
-    require_once ABSPATH . 'wp-admin/includes/image.php';
-
-    $tmp = download_url(esc_url_raw($url), 60);
-    if (is_wp_error($tmp)) return [false, null, $tmp->get_error_message()];
-
-    $file_array = [
-      'name'     => basename(wp_parse_url($url, PHP_URL_PATH) ?: 'visibility-upload'),
-      'tmp_name' => $tmp,
-    ];
-    $attachment_id = media_handle_sideload(
-      $file_array,
-      0,
-      isset($payload['title']) ? sanitize_text_field((string) $payload['title']) : null
-    );
-    if (file_exists($tmp)) {
-      wp_delete_file($tmp);
+    $args = ['source_url' => isset($payload['sourceUrl']) ? (string) $payload['sourceUrl'] : ''];
+    if (!empty($payload['postId'])) $args['post_id'] = (int) $payload['postId'];
+    foreach (['title' => 'title', 'caption' => 'caption', 'description' => 'description', 'filename' => 'filename', 'altText' => 'alt'] as $in => $out) {
+      if (isset($payload[$in]) && is_scalar($payload[$in])) $args[$out] = (string) $payload[$in];
     }
-    if (is_wp_error($attachment_id)) return [false, null, $attachment_id->get_error_message()];
-
-    if (!empty($payload['altText'])) {
-      update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field((string) $payload['altText']));
-    }
-    if (!empty($payload['caption'])) {
-      wp_update_post(['ID' => $attachment_id, 'post_excerpt' => sanitize_text_field((string) $payload['caption'])], true);
-    }
-    return [true, [
-      'mediaId' => $attachment_id,
-      'url' => wp_get_attachment_url($attachment_id),
-    ], null];
+    $res = Visibility_Media::upload($args);
+    if (is_wp_error($res)) return self::fail('invalid', $res->get_error_message());
+    return [true, $res + ['mediaId' => $res['id']], null];
   }
 
   private static function exec_media_update_meta($payload) {

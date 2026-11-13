@@ -28,3 +28,4 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t-seo-adapters.sh` + `head-check.py` — seo_meta.update on no-plugin, Yoast, Rank Math, AIOSEO sites: each tag once in the rendered head, before/after, unsupportedFields, clearing, category SEO (#287, #311–#313).
 - `t-seopress-standdown.sh` — on a SEOPress site our head prints nothing and writes are refused plainly (#282 in #287).
 - `fixtures/og-1200x630.png` — test image (Rank Math only prints images of at least 200x200 from the media library).
+- `t-media.sh` — POST /media: alt, title, caption, readable file name, attached to the post, one upload per source URL, GET /media?id= (#310 plugin part).

@@ -5,6 +5,9 @@ cd "$(dirname "$0")"; . ./lib.sh
 S=1; PORT=3999; STATE=$(mktemp)
 python3 mock-api.py $PORT "$STATE" & MOCK=$!; trap 'kill $MOCK' EXIT; sleep 1
 $WP $S option update visibility_dev_api_base "http://host.docker.internal:$PORT" >/dev/null
+# Start clean: unreported records left by other checks would be retried on
+# each tick and use up the single failing report.
+for o in $($WP $S option list --search='visibility_req_*' --field=option_name); do $WP $S option delete "$o" >/dev/null; done
 count() { $WP $S post list --post_type=post --post_status=any --title="$1" --format=count; }
 tick()  { $WP $S eval 'Visibility_Requests::run_cron_tick();'; }
 
@@ -15,8 +18,11 @@ import json,sys; s,r,t=sys.argv[1:]
 json.dump({"failReports":1,"inbox":[{"id":r,"siteId":"test-site-1","status":"approved","actionType":"post.create_draft","actionPayload":{"title":t,"content":"<p>x</p>"}}]},open(s,"w"))
 PY
 tick; tick; tick
+echo "   reports: $(python3 -c "import json;print([x for x in json.load(open('$STATE'))['reports'] if x['id']=='$R1'])")"
 check "$(count "$T1")" "1" "report failed once: draft created once over 3 ticks"
-check "$(python3 -c "import json;print(sum(1 for r in json.load(open('$STATE'))['reports'] if r['id']=='$R1'))")" "2" "report retried once after failure (2 attempts)"
+# WP-Cron on the site may add a tick of its own, so: at least one failed
+# attempt followed by a successful one, and the action itself ran once.
+check "$(python3 -c "import json;r=[x for x in json.load(open('$STATE'))['reports'] if x['id']=='$R1'];print(len(r)>=2 and r[0]['failed'] and not r[-1]['failed'])")" "True" "report retried after the failure until it succeeded"
 check "$(python3 -c "import json;print([r['failed'] for r in json.load(open('$STATE'))['reports'] if r['id']=='$R1'][-1])")" "False" "second report succeeded"
 
 # 2. Push and cron together -> runs once.
