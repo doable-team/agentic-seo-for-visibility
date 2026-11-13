@@ -89,7 +89,7 @@ class Visibility_REST {
       [
         'methods'             => 'POST',
         'callback'            => [$this, 'create_post'],
-        'permission_callback' => [$this, 'authenticate'],
+        'permission_callback' => [$this, 'authenticate_write'],
       ],
     ]);
     register_rest_route('visibility/v1', '/posts/(?P<id>\d+)', [
@@ -101,12 +101,12 @@ class Visibility_REST {
       [
         'methods'             => 'PATCH',
         'callback'            => [$this, 'update_post'],
-        'permission_callback' => [$this, 'authenticate'],
+        'permission_callback' => [$this, 'authenticate_write'],
       ],
       [
         'methods'             => 'DELETE',
         'callback'            => [$this, 'delete_post'],
-        'permission_callback' => [$this, 'authenticate'],
+        'permission_callback' => [$this, 'authenticate_write'],
       ],
     ]);
 
@@ -120,7 +120,7 @@ class Visibility_REST {
       [
         'methods'             => 'POST',
         'callback'            => $this->create_term_factory('category'),
-        'permission_callback' => [$this, 'authenticate'],
+        'permission_callback' => [$this, 'authenticate_write'],
       ],
     ]);
 
@@ -134,7 +134,7 @@ class Visibility_REST {
       [
         'methods'             => 'POST',
         'callback'            => $this->create_term_factory('post_tag'),
-        'permission_callback' => [$this, 'authenticate'],
+        'permission_callback' => [$this, 'authenticate_write'],
       ],
     ]);
 
@@ -148,7 +148,7 @@ class Visibility_REST {
       [
         'methods'             => 'POST',
         'callback'            => [$this, 'upload_media_from_url'],
-        'permission_callback' => [$this, 'authenticate'],
+        'permission_callback' => [$this, 'authenticate_write'],
       ],
     ]);
   }
@@ -165,6 +165,13 @@ class Visibility_REST {
       return new WP_Error('visibility_bad_token', __('Invalid site token.', 'agentic-seo-visibility'), ['status' => 401]);
     }
     return true;
+  }
+
+  /** Token check plus the owner's pause / publishing switches, for write routes. */
+  public function authenticate_write($request) {
+    $auth = $this->authenticate($request);
+    if ($auth !== true) return $auth;
+    return Visibility_Policy::check_rest($request);
   }
 
   // ── /health ─────────────────────────────────────────────────────────
@@ -218,13 +225,12 @@ class Visibility_REST {
     if (!is_array($body)) {
       return new WP_Error('visibility_bad_body', 'JSON body required.', ['status' => 400]);
     }
-    if (array_key_exists('allowPublish', $body)) {
-      update_option('visibility_allow_publish', (bool) $body['allowPublish'] ? '1' : '0', false);
-    }
-    if (array_key_exists('disabled', $body)) {
-      update_option('visibility_disabled', (bool) $body['disabled'] ? '1' : '0', false);
-    }
-    return rest_ensure_response(['ok' => true]);
+    Visibility_Policy::apply_flags($body);
+    return rest_ensure_response([
+      'ok'           => true,
+      'allowPublish' => Visibility_Policy::publishing_allowed(),
+      'disabled'     => Visibility_Policy::paused(),
+    ]);
   }
 
   public function health(WP_REST_Request $request) {

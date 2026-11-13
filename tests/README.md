@@ -21,3 +21,4 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `baseline.sh <ref> <test>` — run a check against an older plugin version (e.g. `5ffda1f` = 0.9.1).
 - `t15-internal-links.sh` — internal_link.suggest links a phrase once, not in links/headings/code; 0 links is an error (#266).
 - `unit/run.sh` — standalone PHP unit tests (no WordPress) on PHP 7.4 and 8.3.
+- `t13-owner-switches.sh` — publishing off / paused are enforced by the plugin (#273).

@@ -162,6 +162,8 @@ class Visibility_Client {
     if (!empty($body['siteId'])) {
       update_option('visibility_site_id', (string) $body['siteId'], false);
     }
+    // The owner's switches, when the server includes them.
+    Visibility_Policy::apply_flags($body);
     update_option('visibility_last_seen_at', time(), false);
   }
 

@@ -39,7 +39,12 @@ class Visibility_Executor {
     }
     $method = self::method_for($action_type);
     if ($method === null) {
-      return [false, null, sprintf('Unsupported action type: %s', $action_type)];
+      return self::fail('unsupported', sprintf('Unsupported action type: %s', $action_type));
+    }
+    // The owner's switches are checked here, not only on the server.
+    $refused = Visibility_Policy::check_action($action_type, $payload);
+    if ($refused) {
+      return self::fail($refused[0], $refused[1]);
     }
     try {
       return self::{$method}($payload);
