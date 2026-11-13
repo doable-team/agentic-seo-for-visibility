@@ -33,3 +33,4 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t-seopress-standdown.sh` — on a SEOPress site our head prints nothing and writes are refused plainly (#282 in #287).
 - `fixtures/og-1200x630.png` — test image (Rank Math only prints images of at least 200x200 from the media library).
 - `t-media.sh` — POST /media: alt, title, caption, readable file name, attached to the post, one upload per source URL, GET /media?id= (#310 plugin part).
+- `t2-classic.sh` — Classic Editor edit keeps shortcodes, wpautop paragraphs and embeds (T2).
