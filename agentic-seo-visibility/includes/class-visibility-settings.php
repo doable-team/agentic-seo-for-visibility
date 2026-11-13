@@ -162,9 +162,7 @@ class Visibility_Settings {
       // description and no Open Graph at all, so without an SEO plugin the
       // fields agents write would have nowhere to go — we render them
       // ourselves instead, and stand down the moment a real one is installed.
-      $seo_plugin = Visibility_SEO_Head::no_seo_plugin_active() ? null
-        : (defined('WPSEO_VERSION') ? 'Yoast SEO'
-          : (defined('RANK_MATH_VERSION') ? 'Rank Math' : 'All in One SEO'));
+      $seo_plugin = Visibility_SEO_Head::no_seo_plugin_active() ? null : Visibility_SEO::adapter()->name();
       ?>
       <?php if ($seo_plugin === null) : ?>
         <div class="notice notice-warning">

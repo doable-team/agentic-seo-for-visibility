@@ -18,5 +18,6 @@ action() { # action <site> <actionType> <payload-json> [requestId]
   local rid=${4:-t-$RANDOM$RANDOM}
   api "$1" POST /events/action-approved "{\"requestId\":\"$rid\",\"actionType\":\"$2\",\"actionPayload\":$3}"
 }
-jget() { python3 -c "import sys,json; d=json.load(sys.stdin); print(eval('d'+sys.argv[1]))" "$1"; }
+jget() { # jget "['a']['b']" reads d['a']['b']; any other python expression on d is evaluated as is
+  python3 -c "import sys,json; d=json.load(sys.stdin); e=sys.argv[1]; print(eval('d'+e if e.startswith('[') else e))" "$1"; }
 summary(){ echo "---- $pass passed, $fail failed"; [ $fail -eq 0 ]; }

@@ -23,3 +23,4 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `unit/run.sh` — standalone PHP unit tests (no WordPress) on PHP 7.4 and 8.3.
 - `t13-owner-switches.sh` — publishing off / paused are enforced by the plugin (#273).
 - `t16-uninstall.sh` — uninstall leaves no visibility_* options, transients or cron events (#281).
+- `t-read.sh` — rich read of a page (type, editor, blocks with paths, SEO values + rendered, images), list by type/parent, stale modifiedGmt -> conflict (#284).

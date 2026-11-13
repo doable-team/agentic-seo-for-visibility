@@ -37,6 +37,8 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-settings.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-rest.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-executor.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-requests.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-read.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-head.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-schema.php';
 

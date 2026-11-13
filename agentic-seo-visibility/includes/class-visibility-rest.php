@@ -270,8 +270,10 @@ class Visibility_REST {
       if (empty($statuses)) $statuses = ['publish'];
     }
 
-    $query = new WP_Query([
-      'post_type'      => 'post',
+    $types = $this->requested_types($request->get_param('type'));
+    if (is_wp_error($types)) return $types;
+    $args = [
+      'post_type'      => $types,
       'post_status'    => $statuses,
       'posts_per_page' => $perPage,
       'paged'          => $page,
@@ -279,7 +281,10 @@ class Visibility_REST {
       'orderby'        => 'modified',
       'order'          => 'DESC',
       'no_found_rows'  => false,
-    ]);
+    ];
+    $parent = $request->get_param('parent');
+    if ($parent !== null && $parent !== '') $args['post_parent'] = (int) $parent;
+    $query = new WP_Query($args);
 
     $items = [];
     foreach ($query->posts as $p) {
@@ -295,18 +300,59 @@ class Visibility_REST {
     ]);
   }
 
-  public function get_post(WP_REST_Request $request) {
-    $id = (int) $request['id'];
-    $post = get_post($id);
-    if (!$post) {
+  /**
+   * `?type=` → list of post types to query. Default `post` (unchanged);
+   * `any` = every readable type; comma lists allowed. Unknown or non-public
+   * types are refused with a 400.
+   */
+  private function requested_types($param) {
+    $param = is_string($param) ? trim($param) : '';
+    if ($param === '') return ['post'];
+    $readable = array_keys(Visibility_Read::readable_types());
+    if ($param === 'any') return $readable;
+    $types = array_values(array_filter(array_map('sanitize_key', explode(',', $param))));
+    $bad = array_diff($types, $readable);
+    if (!empty($bad) || empty($types)) {
+      return new WP_Error('visibility_bad_type', sprintf(
+        /* translators: 1: requested post types, 2: allowed post types. */
+        __('Post type not available to Visibility: %1$s. Available: %2$s.', 'agentic-seo-visibility'),
+        implode(', ', $bad ?: [$param]), implode(', ', $readable)
+      ), ['status' => 400]);
+    }
+    return $types;
+  }
+
+  /** A post Visibility may read, or a WP_Error (404 for missing and for hidden types). */
+  private function readable_post($id) {
+    $post = get_post((int) $id);
+    if (!$post || !Visibility_Read::type_allowed($post->post_type)) {
       return new WP_Error('visibility_no_post', __('Post not found.', 'agentic-seo-visibility'), ['status' => 404]);
     }
-    return rest_ensure_response($this->serialize_post_full($post->ID));
+    return $post;
+  }
+
+  /**
+   * GET /posts/{id}?include=seo,fields,blocks,builder,terms (or include=all).
+   * Without `include` everything except `blocks` is returned.
+   */
+  public function get_post(WP_REST_Request $request) {
+    $post = $this->readable_post($request['id']);
+    if (is_wp_error($post)) return $post;
+    $inc = $request->get_param('include');
+    $parts = ['seo', 'fields', 'builder', 'terms', 'images'];
+    if (is_string($inc) && $inc !== '') {
+      $parts = $inc === 'all' ? ['seo', 'fields', 'builder', 'terms', 'images', 'blocks'] : array_map('trim', explode(',', $inc));
+    }
+    return rest_ensure_response($this->serialize_post_full($post->ID, $parts));
   }
 
   public function create_post(WP_REST_Request $request) {
     $params = $request->get_json_params() ?: [];
-    $args = $this->build_post_args($params, ['post_status' => 'draft']);
+    $type = isset($params['type']) ? sanitize_key((string) $params['type']) : 'post';
+    if (!in_array($type, ['post', 'page'], true) || !Visibility_Read::type_allowed($type)) {
+      return new WP_Error('visibility_bad_type', __('Only posts and pages can be created.', 'agentic-seo-visibility'), ['status' => 400]);
+    }
+    $args = $this->build_post_args($params, ['post_status' => 'draft', 'post_type' => $type]);
     $post_id = Visibility_Content::save($args);
     if (is_wp_error($post_id)) {
       return $post_id;
@@ -318,11 +364,15 @@ class Visibility_REST {
 
   public function update_post(WP_REST_Request $request) {
     $id = (int) $request['id'];
-    $existing = get_post($id);
-    if (!$existing) {
-      return new WP_Error('visibility_no_post', __('Post not found.', 'agentic-seo-visibility'), ['status' => 404]);
-    }
+    $existing = $this->readable_post($id);
+    if (is_wp_error($existing)) return $existing;
     $params = $request->get_json_params() ?: [];
+    // Optimistic lock: refuse when the post changed since the caller read it.
+    if (Visibility_Content::is_stale($id, $params['modifiedGmt'] ?? null)) {
+      return new WP_Error('visibility_conflict', __('The post was changed after it was read. Read it again and retry.', 'agentic-seo-visibility'), [
+        'status' => 409, 'modifiedGmt' => Visibility_Content::modified_gmt($id),
+      ]);
+    }
     $args   = $this->build_post_args($params, ['ID' => $id], $existing);
     $args['ID'] = $id;
     $updated = Visibility_Content::save($args);
@@ -337,10 +387,8 @@ class Visibility_REST {
   public function delete_post(WP_REST_Request $request) {
     $id = (int) $request['id'];
     $force = filter_var($request->get_param('force'), FILTER_VALIDATE_BOOLEAN);
-    $post = get_post($id);
-    if (!$post) {
-      return new WP_Error('visibility_no_post', __('Post not found.', 'agentic-seo-visibility'), ['status' => 404]);
-    }
+    $post = $this->readable_post($id);
+    if (is_wp_error($post)) return $post;
     $result = wp_delete_post($id, $force);
     if (!$result) {
       return new WP_Error('visibility_delete_failed', __('Could not delete post.', 'agentic-seo-visibility'), ['status' => 500]);
@@ -378,7 +426,9 @@ class Visibility_REST {
         $args['post_date']     = get_date_from_gmt($args['post_date_gmt']);
       }
     }
-    if (!array_key_exists('post_type', $args)) {
+    if (isset($params['parent'])) $args['post_parent'] = max(0, (int) $params['parent']);
+    if (isset($params['menu_order'])) $args['menu_order'] = (int) $params['menu_order'];
+    if (!array_key_exists('post_type', $args) && empty($args['ID'])) {
       $args['post_type'] = 'post';
     }
     return $args;
@@ -512,27 +562,36 @@ class Visibility_REST {
 
   private function serialize_post_summary($post) {
     return [
-      'id'       => (int) $post->ID,
-      'status'   => $post->post_status,
-      'title'    => $post->post_title,
-      'slug'     => $post->post_name,
-      'excerpt'  => wp_strip_all_tags($post->post_excerpt),
-      'link'     => get_permalink($post),
-      'editUrl'  => admin_url('post.php?post=' . $post->ID . '&action=edit'),
-      'date'     => $this->safe_iso($post->post_date_gmt),
-      'modified' => $this->safe_iso($post->post_modified_gmt),
+      'id'          => (int) $post->ID,
+      'type'        => $post->post_type,
+      'status'      => $post->post_status,
+      'title'       => $post->post_title,
+      'slug'        => $post->post_name,
+      'parent'      => (int) $post->post_parent,
+      'excerpt'     => wp_strip_all_tags($post->post_excerpt),
+      'link'        => get_permalink($post),
+      'editUrl'     => admin_url('post.php?post=' . $post->ID . '&action=edit'),
+      'date'        => $this->safe_iso($post->post_date_gmt),
+      'modified'    => $this->safe_iso($post->post_modified_gmt),
+      'modifiedGmt' => Visibility_Content::modified_gmt($post),
     ];
   }
 
-  private function serialize_post_full($post_id) {
+  /**
+   * Full post. $parts picks the optional sections (seo, fields, builder,
+   * terms, images, blocks); the basic fields are always there.
+   */
+  private function serialize_post_full($post_id, array $parts = ['seo', 'fields', 'builder', 'terms', 'images']) {
     $post = get_post($post_id);
     if (!$post) return null;
-    $categories = wp_get_post_categories($post_id, ['fields' => 'all']);
-    $tags       = wp_get_post_tags($post_id);
+    $categories = is_object_in_taxonomy($post->post_type, 'category') ? wp_get_post_categories($post_id, ['fields' => 'all']) : [];
+    $tags       = is_object_in_taxonomy($post->post_type, 'post_tag') ? wp_get_post_tags($post_id) : [];
     $featuredId = (int) get_post_thumbnail_id($post_id);
+    $author     = get_userdata((int) $post->post_author);
 
-    return [
+    $out = [
       'id'           => (int) $post->ID,
+      'type'         => $post->post_type,
       'status'       => $post->post_status,
       'title'        => $post->post_title,
       'slug'         => $post->post_name,
@@ -542,10 +601,23 @@ class Visibility_REST {
       'editUrl'      => admin_url('post.php?post=' . $post->ID . '&action=edit'),
       'date'         => $this->safe_iso($post->post_date_gmt),
       'modified'     => $this->safe_iso($post->post_modified_gmt),
+      'modifiedGmt'  => Visibility_Content::modified_gmt($post),
+      'parent'       => (int) $post->post_parent,
+      'menuOrder'    => (int) $post->menu_order,
+      'template'     => (string) get_page_template_slug($post),
+      'author'       => $author ? ['id' => (int) $author->ID, 'name' => $author->display_name] : null,
+      'editor'       => Visibility_Read::editor_of($post),
       'categories'   => array_map(fn($c) => ['id' => (int) $c->term_id, 'name' => $c->name, 'slug' => $c->slug], $categories),
       'tags'         => array_map(fn($t) => ['id' => (int) $t->term_id, 'name' => $t->name, 'slug' => $t->slug], $tags),
       'featuredMedia' => $featuredId > 0 ? $this->serialize_media($featuredId) : null,
     ];
+    if (in_array('builder', $parts, true)) $out['builder'] = Visibility_Read::builder_of($post);
+    if (in_array('seo', $parts, true))     $out['seo'] = Visibility_SEO::read_post($post->ID);
+    if (in_array('fields', $parts, true))  $out['fields'] = Visibility_Read::fields($post);
+    if (in_array('terms', $parts, true))   $out['terms'] = Visibility_Read::terms($post);
+    if (in_array('images', $parts, true))  $out['images'] = Visibility_Read::images($post->post_content);
+    if (in_array('blocks', $parts, true))  $out['blocks'] = Visibility_Read::blocks($post->post_content);
+    return $out;
   }
 
   private function serialize_media($attachment_id) {

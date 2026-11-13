@@ -128,7 +128,10 @@ class Visibility_Executor {
     $post_id = intval($payload['postId'] ?? 0);
     if (!$post_id) return [false, null, 'postId required'];
     $post = get_post($post_id);
-    if (!$post) return [false, null, 'post not found'];
+    if (!$post) return self::fail('not_found', 'post not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
+    }
     $fields = $payload['fields'] ?? [];
     $args = ['ID' => $post_id];
     // Only markup the agent added is sanitised. Re-filtering the whole page
@@ -720,6 +723,8 @@ class Visibility_Executor {
       'postStatus'  => $post ? $post->post_status : null,
       'postTitle'   => $post ? $post->post_title : null,
       'postSlug'    => $post ? $post->post_name : null,
+      'postType'    => $post ? $post->post_type : null,
+      'modifiedGmt' => $post ? Visibility_Content::modified_gmt($post) : null,
     ];
   }
 }

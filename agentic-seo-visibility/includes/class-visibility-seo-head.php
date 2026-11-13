@@ -1,6 +1,9 @@
 <?php
 /**
- * Emits SEO tags when no SEO plugin is installed.
+ * Emits SEO tags when no SEO plugin is installed (title, description,
+ * robots, canonical, Open Graph, Twitter, JSON-LD) for posts and category/tag
+ * archives. Stands down for every detected SEO plugin; the
+ * `visibility_seo_head_enabled` filter can switch it off (or on).
  *
  * WordPress core has no meta description, no editable SEO title, and no Open
  * Graph tags at all — it only auto-emits `rel=canonical` (2.9+) and a
@@ -24,109 +27,154 @@ if (!defined('ABSPATH')) {
 
 class Visibility_SEO_Head {
 
-  /** Our own postmeta keys — namespaced so they can never collide with a plugin's. */
-  const KEYS = [
-    'metaTitle'       => '_visibility_seo_title',
-    'metaDescription' => '_visibility_seo_description',
-    'focusKeyword'    => '_visibility_seo_focus_keyword',
-    'canonical'       => '_visibility_seo_canonical',
-    'ogTitle'         => '_visibility_seo_og_title',
-    'ogDescription'   => '_visibility_seo_og_description',
-    'ogImage'         => '_visibility_seo_og_image',
-    'robotsNoindex'   => '_visibility_seo_noindex',
-    'robotsNofollow'  => '_visibility_seo_nofollow',
-  ];
+  /** Our own post meta keys (kept for callers of 0.9.x). */
+  const KEYS = Visibility_SEO_Adapter_None::KEYS;
 
   public static function init() {
     // Priority 5: ahead of core's rel_canonical (10) so our canonical wins
     // when one was set explicitly for the post.
     add_action('wp_head', [__CLASS__, 'render'], 5);
+    add_filter('pre_get_document_title', [__CLASS__, 'document_title'], 20);
   }
 
   /**
-   * True when we are the only thing that would emit these tags.
-   *
-   * Mirrors `Visibility_Executor::detect_seo_plugin()`. Kept as its own check
-   * so the renderer has no load-order dependency on the executor class.
+   * True when we are the only thing that would emit these tags: no supported
+   * or detected SEO plugin (Yoast, Rank Math, AIOSEO, SEOPress, The SEO
+   * Framework, Slim SEO), and the `visibility_seo_head_enabled` filter allows it.
    */
   public static function no_seo_plugin_active() {
-    if (defined('WPSEO_VERSION'))     return false;   // Yoast
-    if (defined('RANK_MATH_VERSION')) return false;   // Rank Math
-    if (defined('AIOSEO_VERSION') || class_exists('AIOSEO\\Plugin\\AIOSEO')) return false;
-    return true;
+    return !Visibility_SEO::plugin_active();
   }
 
-  private static function meta($post_id, $field) {
-    $key = self::KEYS[$field] ?? null;
-    if (!$key) return '';
-    $value = get_post_meta($post_id, $key, true);
-    return is_string($value) ? trim($value) : '';
+  public static function enabled() {
+    return (bool) apply_filters('visibility_seo_head_enabled', self::no_seo_plugin_active());
+  }
+
+  /** The SEO title set for the queried post or term, if any. */
+  public static function document_title($title) {
+    if (!self::enabled()) return $title;
+    $v = self::current_values();
+    return ($v && $v['title'] !== '') ? $v['title'] : $title;
+  }
+
+  /** Values for the current request: a singular post or a category/tag archive. */
+  private static function current_values() {
+    if (is_singular()) {
+      $id = get_queried_object_id();
+      return $id ? self::values_for_post($id) : null;
+    }
+    if (is_category() || is_tag() || is_tax()) {
+      $term = get_queried_object();
+      return ($term && isset($term->term_id)) ? self::values_for_term($term) : null;
+    }
+    return null;
+  }
+
+  /**
+   * What the fallback renderer outputs for a post (also the read endpoint's
+   * `seo.rendered` on sites without an SEO plugin).
+   */
+  public static function values_for_post($post_id) {
+    $a = new Visibility_SEO_Adapter_None();
+    $v = $a->read($post_id);
+    $description = $v['metaDescription'];
+    if ($description === '') {
+      $post = get_post($post_id);
+      $excerpt = $post ? ($post->post_excerpt !== '' ? $post->post_excerpt : wp_trim_words(strip_shortcodes(wp_strip_all_tags(excerpt_remove_blocks($post->post_content))), 55, '')) : '';
+      $description = trim(wp_strip_all_tags((string) $excerpt));
+    }
+    $og_title = $v['ogTitle'] !== '' ? $v['ogTitle'] : ($v['metaTitle'] !== '' ? $v['metaTitle'] : get_the_title($post_id));
+    $og_desc  = $v['ogDescription'] !== '' ? $v['ogDescription'] : $description;
+    $og_image = $v['ogImage'] !== '' ? $v['ogImage'] : (string) get_the_post_thumbnail_url($post_id, 'full');
+    $canonical = $v['canonical'];
+    return [
+      'title'              => $v['metaTitle'],
+      'description'        => self::clamp($description, 320),
+      'canonical'          => $canonical !== '' ? $canonical : (string) get_permalink($post_id),
+      'canonicalSet'       => $canonical !== '',
+      'robots'             => ($v['robotsNoindex'] || $v['robotsNofollow']) ? implode(',', [$v['robotsNoindex'] ? 'noindex' : 'index', $v['robotsNofollow'] ? 'nofollow' : 'follow']) : '',
+      'ogTitle'            => self::clamp($og_title, 200),
+      'ogDescription'      => self::clamp($og_desc, 320),
+      'ogImage'            => $og_image,
+      'ogType'             => 'article',
+      'twitterTitle'       => $v['twitterTitle'],
+      'twitterDescription' => $v['twitterDescription'],
+      'twitterImage'       => $v['twitterImage'],
+    ];
+  }
+
+  public static function values_for_term($term) {
+    $a = new Visibility_SEO_Adapter_None();
+    $v = $a->read_term($term->term_id, $term->taxonomy);
+    $description = $v['metaDescription'] !== '' ? $v['metaDescription'] : trim(wp_strip_all_tags(term_description($term)));
+    $canonical = $v['canonical'];
+    $link = get_term_link($term);
+    return [
+      'title'              => $v['metaTitle'],
+      'description'        => self::clamp($description, 320),
+      'canonical'          => $canonical !== '' ? $canonical : (is_wp_error($link) ? '' : $link),
+      'canonicalSet'       => $canonical !== '',
+      'robots'             => ($v['robotsNoindex'] || $v['robotsNofollow']) ? implode(',', [$v['robotsNoindex'] ? 'noindex' : 'index', $v['robotsNofollow'] ? 'nofollow' : 'follow']) : '',
+      'ogTitle'            => self::clamp($v['ogTitle'] !== '' ? $v['ogTitle'] : ($v['metaTitle'] !== '' ? $v['metaTitle'] : $term->name), 200),
+      'ogDescription'      => self::clamp($v['ogDescription'] !== '' ? $v['ogDescription'] : $description, 320),
+      'ogImage'            => $v['ogImage'],
+      'ogType'             => 'website',
+      'twitterTitle'       => '',
+      'twitterDescription' => '',
+      'twitterImage'       => '',
+    ];
   }
 
   public static function render() {
     // An active SEO plugin owns the head. Never double-emit.
-    if (!self::no_seo_plugin_active()) return;
-    if (!is_singular()) return;
-
-    $post_id = get_queried_object_id();
-    if (!$post_id) return;
-
-    $description = self::meta($post_id, 'metaDescription');
-    $canonical   = self::meta($post_id, 'canonical');
-    $og_title    = self::meta($post_id, 'ogTitle');
-    $og_desc     = self::meta($post_id, 'ogDescription');
-    $og_image    = self::meta($post_id, 'ogImage');
-    $noindex     = self::meta($post_id, 'robotsNoindex') === '1';
-    $nofollow    = self::meta($post_id, 'robotsNofollow') === '1';
-
-    // Fall back to the post's own excerpt/featured image before emitting
-    // nothing — a description is the single highest-value tag here.
-    if ($description === '') {
-      $excerpt = get_the_excerpt($post_id);
-      if (is_string($excerpt)) $description = trim(wp_strip_all_tags($excerpt));
-    }
-    if ($og_title === '')  $og_title = get_the_title($post_id);
-    if ($og_desc === '')   $og_desc  = $description;
-    if ($og_image === '')  $og_image = (string) get_the_post_thumbnail_url($post_id, 'full');
+    if (!self::enabled()) return;
+    $v = self::current_values();
+    if (!$v) return;
 
     echo "\n<!-- Agentic SEO for Visibility -->\n";
-
-    if ($description !== '') {
-      printf("<meta name=\"description\" content=\"%s\" />\n", esc_attr(self::clamp($description, 320)));
+    if ($v['description'] !== '') {
+      printf("<meta name=\"description\" content=\"%s\" />\n", esc_attr($v['description']));
     }
-    if ($noindex || $nofollow) {
-      $directives = [$noindex ? 'noindex' : 'index', $nofollow ? 'nofollow' : 'follow'];
-      printf("<meta name=\"robots\" content=\"%s\" />\n", esc_attr(implode(',', $directives)));
+    if ($v['robots'] !== '') {
+      // Core prints its own robots tag only for noindex sites; ours is per page.
+      printf("<meta name=\"robots\" content=\"%s\" />\n", esc_attr($v['robots']));
     }
-    if ($canonical !== '') {
+    if ($v['canonicalSet']) {
       // Ours wins: core's rel_canonical runs later at priority 10, so remove it.
       remove_action('wp_head', 'rel_canonical');
-      printf("<link rel=\"canonical\" href=\"%s\" />\n", esc_url($canonical));
+      printf("<link rel=\"canonical\" href=\"%s\" />\n", esc_url($v['canonical']));
     }
 
     // Open Graph — core emits none of this.
-    if ($og_title !== '') printf("<meta property=\"og:title\" content=\"%s\" />\n", esc_attr(self::clamp($og_title, 200)));
-    if ($og_desc !== '')  printf("<meta property=\"og:description\" content=\"%s\" />\n", esc_attr(self::clamp($og_desc, 320)));
-    if ($og_image !== '') printf("<meta property=\"og:image\" content=\"%s\" />\n", esc_url($og_image));
-    printf("<meta property=\"og:type\" content=\"article\" />\n");
-    printf("<meta property=\"og:url\" content=\"%s\" />\n", esc_url($canonical !== '' ? $canonical : get_permalink($post_id)));
+    if ($v['ogTitle'] !== '') printf("<meta property=\"og:title\" content=\"%s\" />\n", esc_attr($v['ogTitle']));
+    if ($v['ogDescription'] !== '') printf("<meta property=\"og:description\" content=\"%s\" />\n", esc_attr($v['ogDescription']));
+    if ($v['ogImage'] !== '') printf("<meta property=\"og:image\" content=\"%s\" />\n", esc_url($v['ogImage']));
+    printf("<meta property=\"og:type\" content=\"%s\" />\n", esc_attr($v['ogType']));
+    if ($v['canonical'] !== '') printf("<meta property=\"og:url\" content=\"%s\" />\n", esc_url($v['canonical']));
 
-    // Twitter reads og:* for the rest; only the card type is its own.
-    printf("<meta name=\"twitter:card\" content=\"%s\" />\n", $og_image !== '' ? 'summary_large_image' : 'summary');
+    // Twitter reads og:* for anything not set here.
+    $tw_image = $v['twitterImage'] !== '' ? $v['twitterImage'] : $v['ogImage'];
+    printf("<meta name=\"twitter:card\" content=\"%s\" />\n", $tw_image !== '' ? 'summary_large_image' : 'summary');
+    if ($v['twitterTitle'] !== '') printf("<meta name=\"twitter:title\" content=\"%s\" />\n", esc_attr(self::clamp($v['twitterTitle'], 200)));
+    if ($v['twitterDescription'] !== '') printf("<meta name=\"twitter:description\" content=\"%s\" />\n", esc_attr(self::clamp($v['twitterDescription'], 320)));
+    if ($v['twitterImage'] !== '') printf("<meta name=\"twitter:image\" content=\"%s\" />\n", esc_url($v['twitterImage']));
 
-    // Structured data the executor has been storing since 0.7.x, finally rendered.
-    $schema = class_exists('Visibility_Schema') ? Visibility_Schema::get($post_id) : null;
-    if (is_array($schema)) {
-      if (!isset($schema['@context']) && !isset($schema[0])) $schema = ['@context' => 'https://schema.org'] + $schema;
-      if (isset($schema[0])) $schema = ['@context' => 'https://schema.org', '@graph' => Visibility_Schema::nodes($post_id)];
-      printf("<script type=\"application/ld+json\">%s</script>\n", wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG));
+    // Structured data written for the post.
+    if (is_singular()) {
+      $post_id = get_queried_object_id();
+      $schema = class_exists('Visibility_Schema') ? Visibility_Schema::get($post_id) : null;
+      if (is_array($schema)) {
+        if (!isset($schema['@context']) && !isset($schema[0])) $schema = ['@context' => 'https://schema.org'] + $schema;
+        if (isset($schema[0])) $schema = ['@context' => 'https://schema.org', '@graph' => Visibility_Schema::nodes($post_id)];
+        printf("<script type=\"application/ld+json\">%s</script>\n", wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG));
+      }
     }
 
     echo "<!-- /Agentic SEO for Visibility -->\n";
   }
 
   private static function clamp($text, $max) {
-    $text = preg_replace('/\s+/', ' ', (string) $text);
+    $text = trim((string) preg_replace('/\s+/', ' ', (string) $text));
     if (function_exists('mb_strlen') && mb_strlen($text) > $max) {
       return rtrim(mb_substr($text, 0, $max - 1)) . '…';
     }
