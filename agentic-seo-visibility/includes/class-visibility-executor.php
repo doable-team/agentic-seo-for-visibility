@@ -19,7 +19,21 @@ if (!defined('ABSPATH')) {
 
 class Visibility_Executor {
 
+  /** Machine-readable reason for the last failure (conflict, unsupported, …). */
+  private static $last_error_code = null;
+
+  public static function last_error_code() {
+    return self::$last_error_code;
+  }
+
+  /** Fail with a code the app can branch on, plus a plain message. */
+  private static function fail($code, $message) {
+    self::$last_error_code = $code;
+    return [false, null, $message];
+  }
+
   public static function execute($action_type, $payload) {
+    self::$last_error_code = null;
     if (!is_array($payload)) {
       return [false, null, 'Payload is not an object'];
     }

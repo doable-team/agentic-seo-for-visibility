@@ -186,14 +186,18 @@ class Visibility_REST {
     if ($request_id === '' || $action_type === '') {
       return new WP_Error('visibility_bad_body', 'requestId and actionType are required.', ['status' => 400]);
     }
-    list($ok, $result, $err) = Visibility_Executor::execute($action_type, $payload);
-    Visibility_Client::report_execution($request_id, $ok, $result, $err);
-    return rest_ensure_response([
-      'ok'        => (bool) $ok,
+    // Runs once per requestId: a repeat (or a race with the cron tick) gets
+    // the stored outcome back with duplicate=true instead of a second run.
+    $run = Visibility_Requests::run($request_id, $action_type, $payload);
+    $out = [
+      'ok'        => (bool) $run['ok'],
       'requestId' => $request_id,
-      'result'    => $result,
-      'error'     => $err,
-    ]);
+      'result'    => $run['result'],
+      'error'     => $run['error'],
+    ];
+    if (!$run['ok'] && !empty($run['errorCode'])) $out['errorCode'] = $run['errorCode'];
+    if ($run['duplicate']) $out['duplicate'] = true;
+    return rest_ensure_response($out);
   }
 
   /** Bulk catch-up — pulls every approved-not-yet-executed request from
