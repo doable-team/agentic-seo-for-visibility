@@ -15,8 +15,8 @@ HTML='<!-- wp:heading -->
 <figure class="wp-block-image"><img src="https://example.com/a.png" alt="An example"/></figure>
 <!-- /wp:image --></div>
 <!-- /wp:group -->'
-PARENT=$($WP $S post create --post_type=page --post_status=publish --post_title="Read parent $RANDOM" --porcelain | tr -d '\r')
-ID=$(printf '%s' "$HTML" | $WP $S post create - --post_type=page --post_status=publish --post_parent=$PARENT --post_title="Read page $RANDOM" --porcelain | tr -d '\r')
+PARENT=$($WP $S post create --post_type=page --post_status=publish --post_title="Read parent $RANDOM" --porcelain | tr -d '\r' | tail -1)
+ID=$(printf '%s' "$HTML" | $WP $S post create - --post_type=page --post_status=publish --post_parent=$PARENT --post_title="Read page $RANDOM" --porcelain | tr -d '\r' | tail -1)
 action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"Read title\",\"metaDescription\":\"Read description\"}}" >/dev/null
 R=$(api $S GET "/posts/$ID?include=all")
 j() { echo "$R" | jget "$1"; }

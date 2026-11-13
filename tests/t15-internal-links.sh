@@ -4,7 +4,7 @@
 # no link could be added.
 cd "$(dirname "$0")"; . ./lib.sh
 S=1
-TGT=$($WP $S post create --post_status=publish --post_title="Target $RANDOM" --porcelain | tr -d '\r')
+TGT=$($WP $S post create --post_status=publish --post_title="Target $RANDOM" --porcelain | tr -d '\r' | tail -1)
 URL=$($WP $S post url $TGT)
 HTML='<!-- wp:heading -->
 <h2>Keyword research basics</h2>
@@ -13,7 +13,7 @@ HTML='<!-- wp:heading -->
 <!-- wp:paragraph -->
 <p>See the <a href="https://example.com/">keyword research guide</a>. Run <code>keyword research</code>. Good keyword research saves time. More keyword research later.</p>
 <!-- /wp:paragraph -->'
-ID=$(printf '%s' "$HTML" | $WP $S post create - --post_status=publish --post_title="T15 source" --porcelain | tr -d '\r')
+ID=$(printf '%s' "$HTML" | $WP $S post create - --post_status=publish --post_title="T15 source" --porcelain | tr -d '\r' | tail -1)
 REVS0=$($WP $S post list --post_type=revision --post_parent=$ID --format=count)
 R=$(action $S internal_link.suggest "{\"postId\":$ID,\"suggestions\":[{\"phrase\":\"keyword research\",\"targetPostId\":$TGT},{\"phrase\":\"missing phrase\",\"targetPostId\":$TGT}]}")
 check "$(echo "$R" | jget "['ok']")" "True" "ok"

@@ -25,3 +25,6 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t16-uninstall.sh` — uninstall leaves no visibility_* options, transients or cron events (#281).
 - `t-read.sh` — rich read of a page (type, editor, blocks with paths, SEO values + rendered, images), list by type/parent, stale modifiedGmt -> conflict (#284).
 - `t-capabilities.sh` — GET /capabilities on an Elementor + Yoast + WP Rocket (detection stub) + LiteSpeed site and the others (#294).
+- `t-seo-adapters.sh` + `head-check.py` — seo_meta.update on no-plugin, Yoast, Rank Math, AIOSEO sites: each tag once in the rendered head, before/after, unsupportedFields, clearing, category SEO (#287, #311–#313).
+- `t-seopress-standdown.sh` — on a SEOPress site our head prints nothing and writes are refused plainly (#282 in #287).
+- `fixtures/og-1200x630.png` — test image (Rank Math only prints images of at least 200x200 from the media library).

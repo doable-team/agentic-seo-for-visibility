@@ -9,7 +9,7 @@ $WP $S option update visibility_project_name "Project X" >/dev/null
 $WP $S option update visibility_company_name "Company Y" >/dev/null
 $WP $S transient set visibility_test_transient 1 3600 >/dev/null
 action $S post.create_draft '{"title":"T16 record"}' >/dev/null   # leaves a visibility_req_* record
-P=$($WP $S post create --post_status=publish --post_title="T16 seo" --porcelain | tr -d '\r')
+P=$($WP $S post create --post_status=publish --post_title="T16 seo" --porcelain | tr -d '\r' | tail -1)
 action $S seo_meta.update "{\"postId\":$P,\"fields\":{\"metaDescription\":\"kept\"}}" >/dev/null
 check "$($WP $S post meta get $P _visibility_seo_description)" "kept" "SEO field stored before uninstall"
 $WP $S cron event schedule visibility_pull_approved_requests now visibility_every_5_min >/dev/null 2>&1

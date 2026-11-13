@@ -17,7 +17,7 @@ HTML='<!-- wp:paragraph -->
 <!-- wp:paragraph -->
 <p>Second paragraph.</p>
 <!-- /wp:paragraph -->'
-ID=$(printf '%s' "$HTML" | $WP $S post create - --post_type=page --post_status=publish --post_title="T11 embeds" --user=admin --porcelain | tr -d '\r')
+ID=$(printf '%s' "$HTML" | $WP $S post create - --post_type=page --post_status=publish --post_title="T11 embeds" --user=admin --porcelain | tr -d '\r' | tail -1)
 BEFORE=$($WP $S post get $ID --field=post_content)
 check "$BEFORE" "$HTML" "fixture saved verbatim"
 NEW=$(printf '%s' "$HTML" | python3 -c "import sys,json; s=sys.stdin.read().replace('<p>Second paragraph.</p>','<p>Second paragraph, <strong>rewritten</strong> <img src=x onerror=alert(1)>.</p>'); print(json.dumps(s))")

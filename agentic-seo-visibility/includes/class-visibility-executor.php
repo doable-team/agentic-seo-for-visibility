@@ -425,224 +425,110 @@ class Visibility_Executor {
 
   // ─── SEO meta ──────────────────────────────────────────────────────────
 
-  /** Detect which SEO plugin is active and route the field to its meta key. */
-  private static function detect_seo_plugin() {
-    if (defined('WPSEO_VERSION'))            return 'yoast';
-    if (defined('RANK_MATH_VERSION'))        return 'rankmath';
-    if (defined('AIOSEO_VERSION') || class_exists('AIOSEO\\Plugin\\AIOSEO')) return 'aioseo';
-    return null;
-  }
-
-  private static function seo_meta_keys($plugin) {
-    switch ($plugin) {
-      case 'yoast':
-        return [
-          'metaTitle'       => '_yoast_wpseo_title',
-          'metaDescription' => '_yoast_wpseo_metadesc',
-          'focusKeyword'    => '_yoast_wpseo_focuskw',
-          'canonical'       => '_yoast_wpseo_canonical',
-          'ogTitle'         => '_yoast_wpseo_opengraph-title',
-          'ogDescription'   => '_yoast_wpseo_opengraph-description',
-          'ogImage'         => '_yoast_wpseo_opengraph-image',
-          'robotsNoindex'   => '_yoast_wpseo_meta-robots-noindex',
-          'robotsNofollow'  => '_yoast_wpseo_meta-robots-nofollow',
-        ];
-      case 'rankmath':
-        return [
-          'metaTitle'       => 'rank_math_title',
-          'metaDescription' => 'rank_math_description',
-          'focusKeyword'    => 'rank_math_focus_keyword',
-          'canonical'       => 'rank_math_canonical_url',
-          'ogTitle'         => 'rank_math_facebook_title',
-          'ogDescription'   => 'rank_math_facebook_description',
-          'ogImage'         => 'rank_math_facebook_image',
-          'robotsNoindex'   => 'rank_math_robots',  // value is array; serialized below
-          'robotsNofollow'  => 'rank_math_robots',
-        ];
-      default:
-        return [];
-    }
-  }
-
-  private static function exec_seo_meta_update($payload) {
-    $post_id = intval($payload['postId'] ?? 0);
-    if (!$post_id) return [false, null, 'postId required'];
-    $fields = $payload['fields'] ?? [];
-
-    $plugin = self::detect_seo_plugin();
-    if (!$plugin) {
-      // No SEO plugin: store under our own keys and render them ourselves from
-      // `Visibility_SEO_Head`. This used to hard-fail, which meant a site
-      // without Yoast/Rank Math/AIO SEO silently got no meta description, no
-      // Open Graph and no canonical — WordPress core emits none of those. The
-      // fields are kept verbatim so that installing a real SEO plugin later is
-      // a clean handover: our renderer stands down, and nothing was lost.
-      return self::store_seo_meta_fallback($post_id, $fields);
-    }
-
-    if ($plugin === 'aioseo') {
-      return self::write_aioseo($post_id, $fields);
-    }
-
-    $keys = self::seo_meta_keys($plugin);
-    foreach ($fields as $key => $value) {
-      // Handled before the key lookup: no SEO plugin has a meta key for it.
-      // Visibility_Schema merges it into the plugin's own graph on output.
-      if ($key === 'schemaJsonLd') {
-        Visibility_Schema::store($post_id, $value);
-        continue;
-      }
-      if (!isset($keys[$key])) continue;
-      $meta_key = $keys[$key];
-      if ($key === 'robotsNoindex' || $key === 'robotsNofollow') {
-        if ($plugin === 'yoast') {
-          update_post_meta($post_id, $meta_key, $value ? '1' : '');
-        } elseif ($plugin === 'rankmath') {
-          $existing = (array) get_post_meta($post_id, $meta_key, true);
-          $flag = $key === 'robotsNoindex' ? 'noindex' : 'nofollow';
-          if ($value) {
-            if (!in_array($flag, $existing, true)) $existing[] = $flag;
-          } else {
-            $existing = array_diff($existing, [$flag]);
-          }
-          update_post_meta($post_id, $meta_key, array_values($existing));
-        }
-        continue;
-      }
-      update_post_meta($post_id, $meta_key, is_scalar($value) ? sanitize_text_field((string) $value) : $value);
-    }
-    return [true, ['postId' => $post_id, 'seoPlugin' => $plugin], null];
-  }
-
   /**
-   * All in One SEO 4.x/5.x keeps per-post SEO in its own `aioseo_posts` table,
-   * not post meta, so meta written with update_post_meta never reaches the page.
-   * Write through AIOSEO's own Post model (which also syncs its localisation
-   * meta and fires `aioseo_insert_post`), then read the row back and fail if
-   * AIOSEO did not keep what we asked for.
+   * Write SEO fields through the active SEO plugin's adapter (Visibility_SEO).
+   *
+   * Payload: {postId, fields, modifiedGmt?} or {termId, taxonomy, fields}.
+   * Result: written fields, unsupportedFields (never silently skipped), the
+   * stored values before and after, and what the page renders afterwards.
+   * Fails when nothing could be written or a value did not stick.
    */
-  private static function write_aioseo($post_id, $fields) {
-    $model = 'AIOSEO\\Plugin\\Common\\Models\\Post';
-    if (!class_exists($model) || !function_exists('aioseo')) {
-      return [false, null, 'All in One SEO is active but its Post model is not available.'];
+  private static function exec_seo_meta_update($payload) {
+    $fields = isset($payload['fields']) && is_array($payload['fields']) ? $payload['fields'] : [];
+    if (empty($fields)) return self::fail('invalid', 'fields required');
+    if (!empty($payload['termId'])) {
+      return self::seo_meta_update_term($payload, $fields);
     }
-    $current = $model::getPost($post_id);
-    $data = [];
-    $written = [];
-    $unsupported = [];
-    $text = function ($v) { return $v === null ? '' : sanitize_text_field((string) $v); };
-    foreach ($fields as $key => $value) {
-      switch ($key) {
-        case 'metaTitle':       $data['title'] = $text($value); break;
-        case 'metaDescription': $data['description'] = $text($value); break;
-        case 'canonical':       $data['canonicalUrl'] = $value ? esc_url_raw((string) $value) : ''; break;
-        case 'ogTitle':         $data['og_title'] = $text($value); break;
-        case 'ogDescription':   $data['og_description'] = $text($value); break;
-        case 'ogImage':
-          $data['og_image_type']       = $value ? 'custom_image' : 'default';
-          $data['og_image_custom_url'] = $value ? esc_url_raw((string) $value) : '';
-          break;
-        case 'twitterTitle':       $data['twitter_title'] = $text($value); $data['twitter_use_og'] = false; break;
-        case 'twitterDescription': $data['twitter_description'] = $text($value); $data['twitter_use_og'] = false; break;
-        case 'twitterImage':
-          $data['twitter_use_og']           = false;
-          $data['twitter_image_type']       = $value ? 'custom_image' : 'default';
-          $data['twitter_image_custom_url'] = $value ? esc_url_raw((string) $value) : '';
-          break;
-        case 'focusKeyword':
-          $kw = $text($value);
-          $data['focus_keyword'] = $kw;
-          $kp = json_decode(wp_json_encode($current->keyphrases ?: new \stdClass()), true);
-          if (!is_array($kp)) $kp = [];
-          if (!isset($kp['focus']) || !is_array($kp['focus'])) $kp['focus'] = [];
-          $kp['focus']['keyphrase'] = $kw;
-          if (!isset($kp['additional'])) $kp['additional'] = [];
-          $data['keyphrases'] = $kp;
-          break;
-        case 'robotsNoindex':
-        case 'robotsNofollow':
-          // Per-post robots only apply when "use default settings" is off.
-          $noindex  = array_key_exists('robotsNoindex', $fields) ? (bool) $fields['robotsNoindex'] : (bool) $current->robots_noindex;
-          $nofollow = array_key_exists('robotsNofollow', $fields) ? (bool) $fields['robotsNofollow'] : (bool) $current->robots_nofollow;
-          $data['default']  = !$noindex && !$nofollow;
-          $data['noindex']  = $noindex;
-          $data['nofollow'] = $nofollow;
-          break;
-        case 'cornerstone':
-          $data['pillar_content'] = (bool) $value;
-          break;
-        default:
-          if ($key !== 'schemaJsonLd') $unsupported[] = $key;
-          continue 2;
-      }
-      $written[] = $key;
+    $post_id = intval($payload['postId'] ?? 0);
+    if (!$post_id) return self::fail('invalid', 'postId required');
+    if (!get_post($post_id)) return self::fail('not_found', 'post not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
     }
-    if (array_key_exists('schemaJsonLd', $fields)) {
-      $written[] = 'schemaJsonLd';
+
+    $adapter = Visibility_SEO::adapter();
+    if (!$adapter->writable()) {
+      return self::fail('unsupported', sprintf('%s is active on this site; Visibility cannot write its fields yet.', $adapter->name()));
     }
-    if (!empty($data)) {
-      $err = $model::savePost($post_id, $data);
-      if (is_string($err) && $err !== '') return [false, null, 'All in One SEO could not save: ' . $err];
-      if (isset(aioseo()->meta->metaData) && method_exists(aioseo()->meta->metaData, 'bustPostCache')) {
-        aioseo()->meta->metaData->bustPostCache($post_id);
-      }
-      clean_post_cache($post_id);
-      // Read back what AIOSEO will output from.
-      $saved = $model::getPost($post_id);
-      $checks = ['title' => 'metaTitle', 'description' => 'metaDescription', 'canonical_url' => 'canonical', 'og_title' => 'ogTitle', 'og_description' => 'ogDescription'];
-      $col = ['title' => 'title', 'description' => 'description', 'canonicalUrl' => 'canonical_url', 'og_title' => 'og_title', 'og_description' => 'og_description'];
-      foreach ($col as $in => $column) {
-        if (!array_key_exists($in, $data)) continue;
-        $want = (string) $data[$in];
-        $got  = (string) $saved->{$column};
-        if ($want !== $got) {
-          return [false, null, sprintf('All in One SEO did not keep %s (asked "%s", stored "%s").', $checks[$column], $want, $got)];
-        }
-      }
-    }
+    $before = Visibility_SEO::read_post($post_id, false)['values'];
+
+    $res = $adapter->write($post_id, $fields);
+    if (is_wp_error($res)) return self::fail('save_failed', $res->get_error_message());
+    $written = $res['written'];
     if (array_key_exists('schemaJsonLd', $fields)) {
       Visibility_Schema::store($post_id, $fields['schemaJsonLd']);
+      $written[] = 'schemaJsonLd';
     }
-    return [true, [
+    $unsupported = array_values(array_unique(array_diff($res['unsupported'], ['schemaJsonLd'])));
+    $notes = isset($res['notes']) ? $res['notes'] : [];
+    if (empty($written)) {
+      return self::fail('unsupported', sprintf('%s cannot take these fields: %s.', $adapter->name(), implode(', ', $unsupported)));
+    }
+
+    $read = Visibility_SEO::read_post($post_id);
+    $after = $read['values'];
+    // Read back: every written field must now hold what was asked.
+    foreach ($written as $f) {
+      if (!self::seo_value_matches($f, $fields[$f], $after[$f] ?? null)) {
+        return self::fail('not_applied', sprintf('%s did not keep %s (asked %s, stored %s).', $adapter->name(), $f, wp_json_encode($fields[$f]), wp_json_encode($after[$f] ?? null)));
+      }
+    }
+    $result = [
       'postId'            => $post_id,
-      'seoPlugin'         => 'aioseo',
+      'seoPlugin'         => $adapter->slug(),
       'fields'            => $written,
       'unsupportedFields' => $unsupported,
+      'before'            => array_intersect_key($before, array_flip($written)),
+      'after'             => array_intersect_key($after, array_flip($written)),
+      'rendered'          => $read['rendered'],
+    ];
+    if ($notes) $result['notes'] = $notes;
+    if ($adapter->slug() === null) $result['renderedBy'] = 'visibility';
+    return [true, $result, null];
+  }
+
+  private static function seo_meta_update_term($payload, $fields) {
+    $term_id  = intval($payload['termId']);
+    $taxonomy = isset($payload['taxonomy']) ? sanitize_key((string) $payload['taxonomy']) : '';
+    $term = $taxonomy !== '' ? get_term($term_id, $taxonomy) : get_term($term_id);
+    if (!$term || is_wp_error($term)) return self::fail('not_found', 'term not found');
+    $taxonomy = $term->taxonomy;
+    $adapter = Visibility_SEO::adapter();
+    if (!$adapter->writable() || empty($adapter->term_fields())) {
+      return self::fail('unsupported', sprintf('Category and tag SEO is not supported for %s.', $adapter->name()));
+    }
+    $before = $adapter->read_term($term_id, $taxonomy);
+    $res = $adapter->write_term($term_id, $taxonomy, $fields);
+    if (is_wp_error($res)) return self::fail('save_failed', $res->get_error_message());
+    if (empty($res['written'])) {
+      return self::fail('unsupported', sprintf('%s cannot take these fields for terms: %s.', $adapter->name(), implode(', ', $res['unsupported'])));
+    }
+    $after = $adapter->read_term($term_id, $taxonomy);
+    foreach ($res['written'] as $f) {
+      if (!self::seo_value_matches($f, $fields[$f], $after[$f] ?? null)) {
+        return self::fail('not_applied', sprintf('%s did not keep %s for the term.', $adapter->name(), $f));
+      }
+    }
+    return [true, [
+      'termId'            => $term_id,
+      'taxonomy'          => $taxonomy,
+      'seoPlugin'         => $adapter->slug(),
+      'fields'            => $res['written'],
+      'unsupportedFields' => array_values($res['unsupported']),
+      'before'            => array_intersect_key($before, array_flip($res['written'])),
+      'after'             => array_intersect_key($after, array_flip($res['written'])),
     ], null];
   }
 
-  /**
-   * Persist SEO fields under Visibility's own keys (no SEO plugin installed).
-   *
-   * `Visibility_SEO_Head` renders these into <head>, and only while no SEO
-   * plugin is active — so this never competes with Yoast/Rank Math/AIO SEO.
-   */
-  private static function store_seo_meta_fallback($post_id, $fields) {
-    if (!class_exists('Visibility_SEO_Head')) {
-      return [false, null, 'Visibility SEO renderer not loaded.'];
-    }
-    $keys = Visibility_SEO_Head::KEYS;
-    $written = [];
-    foreach ($fields as $key => $value) {
-      if ($key === 'schemaJsonLd') {
-        Visibility_Schema::store($post_id, $value);
-        $written[] = $key;
-        continue;
-      }
-      if (!isset($keys[$key])) continue;
-      if ($key === 'robotsNoindex' || $key === 'robotsNofollow') {
-        update_post_meta($post_id, $keys[$key], $value ? '1' : '');
-      } else {
-        update_post_meta($post_id, $keys[$key], is_scalar($value) ? sanitize_text_field((string) $value) : $value);
-      }
-      $written[] = $key;
-    }
-    return [true, [
-      'postId'     => $post_id,
-      'seoPlugin'  => null,
-      'renderedBy' => 'visibility',
-      'fields'     => $written,
-    ], null];
+  /** Compare an asked value with the stored one, after the same sanitising. */
+  private static function seo_value_matches($field, $asked, $stored) {
+    if (in_array($field, ['robotsNoindex', 'robotsNofollow', 'cornerstone'], true)) return (bool) $asked === (bool) $stored;
+    if ($field === 'primaryCategory') return (int) $asked === (int) $stored;
+    if ($field === 'schemaJsonLd' || $field === 'advancedRobots') return true;
+    $want = in_array($field, ['canonical', 'ogImage', 'twitterImage'], true)
+      ? (($asked === null || $asked === '') ? '' : esc_url_raw((string) $asked))
+      : ($asked === null ? '' : sanitize_text_field((string) $asked));
+    return $want === (string) $stored;
   }
 
   // ─── Redirects ─────────────────────────────────────────────────────────

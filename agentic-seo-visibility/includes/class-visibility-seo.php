@@ -301,6 +301,10 @@ class Visibility_SEO_Adapter_Yoast extends Visibility_SEO_Adapter {
   public function rendered($post_id) {
     if (!function_exists('YoastSEO')) return null;
     try {
+      // Yoast memoizes the meta context per request; after a write in the
+      // same request it would answer with the old values.
+      $memo = YoastSEO()->classes->get('Yoast\\WP\\SEO\\Memoizers\\Meta_Tags_Context_Memoizer');
+      if ($memo && method_exists($memo, 'clear')) $memo->clear();
       $m = YoastSEO()->meta->for_post($post_id);
       if (!$m) return null;
       $robots = is_array($m->robots) ? array_values(array_filter($m->robots)) : [];
@@ -390,9 +394,13 @@ class Visibility_SEO_Adapter_RankMath extends Visibility_SEO_Adapter {
         elseif (in_array($f, ['canonical', 'ogImage', 'twitterImage'], true)) $v = self::url($v);
         else $v = self::text($v);
         if ($v === '') $del($key); else $set($key, wp_slash($v));
-        // Rank Math reads the image id first; drop a stale one.
-        if ($f === 'ogImage') $del('rank_math_facebook_image_id');
-        if ($f === 'twitterImage') $del('rank_math_twitter_image_id');
+        // Rank Math outputs social images only by attachment id; the URL is
+        // what its own editor shows. Keep both in step.
+        if ($f === 'ogImage' || $f === 'twitterImage') {
+          $id_key = $f === 'ogImage' ? 'rank_math_facebook_image_id' : 'rank_math_twitter_image_id';
+          $att = $v !== '' ? (int) attachment_url_to_postid($v) : 0;
+          if ($att) $set($id_key, $att); else $del($id_key);
+        }
         if (in_array($f, ['twitterTitle', 'twitterDescription', 'twitterImage'], true) && $v !== '') {
           // Otherwise Rank Math copies the Facebook values over the Twitter ones.
           $set('rank_math_twitter_use_facebook', 'off');
@@ -415,7 +423,30 @@ class Visibility_SEO_Adapter_RankMath extends Visibility_SEO_Adapter {
     return ['written' => array_keys($take), 'unsupported' => $rest];
   }
 
+  /**
+   * Rank Math only prints a social image that is in the media library. A
+   * remote URL would be stored and silently never shown, so refuse it.
+   */
+  private function split_remote_images(array $fields) {
+    $refused = [];
+    foreach (['ogImage', 'twitterImage'] as $f) {
+      if (!empty($fields[$f]) && !attachment_url_to_postid(esc_url_raw((string) $fields[$f]))) {
+        unset($fields[$f]);
+        $refused[] = $f;
+      }
+    }
+    return [$fields, $refused];
+  }
+
   public function write($post_id, array $fields) {
+    list($fields, $refused) = $this->split_remote_images($fields);
+    $r = $this->write_with($post_id, $fields);
+    $r['unsupported'] = array_merge($r['unsupported'], $refused);
+    if ($refused) $r['notes'][] = 'Rank Math only shows social images from the media library; upload the image first (POST /media) and send its URL.';
+    return $r;
+  }
+
+  private function write_with($post_id, array $fields) {
     $r = $this->write_to($fields, $this->fields(),
       function ($k) use ($post_id) { return get_post_meta($post_id, $k, true); },
       function ($k, $v) use ($post_id) { update_post_meta($post_id, $k, $v); },
@@ -649,14 +680,19 @@ class Visibility_SEO {
   }
 
   /** Stored values + what the front end renders, for the read endpoint. */
-  public static function read_post($post_id) {
+  /**
+   * @param bool $with_rendered Rendering primes some SEO plugins' in-request
+   *        caches (AIOSEO keeps titles in statics), so skip it for a read that
+   *        is followed by a write in the same request.
+   */
+  public static function read_post($post_id, $with_rendered = true) {
     $a = self::adapter();
     $values = $a->read($post_id);
     if (class_exists('Visibility_Schema')) $values['schemaJsonLd'] = Visibility_Schema::get($post_id);
     return [
       'plugin'          => $a->slug(),
       'values'          => $values,
-      'rendered'        => $a->rendered($post_id),
+      'rendered'        => $with_rendered ? $a->rendered($post_id) : null,
       'supportedFields' => $a->writable() ? $a->fields() : [],
     ];
   }

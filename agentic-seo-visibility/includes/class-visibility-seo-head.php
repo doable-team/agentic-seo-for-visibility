@@ -35,6 +35,22 @@ class Visibility_SEO_Head {
     // when one was set explicitly for the post.
     add_action('wp_head', [__CLASS__, 'render'], 5);
     add_filter('pre_get_document_title', [__CLASS__, 'document_title'], 20);
+    // Core prints one robots tag (wp_robots, WP 5.7+); add ours to it rather
+    // than print a second one.
+    add_filter('wp_robots', [__CLASS__, 'robots'], 20);
+  }
+
+  public static function robots($robots) {
+    if (!self::enabled()) return $robots;
+    $v = self::current_values();
+    if (!$v || $v['robots'] === '') return $robots;
+    foreach (explode(',', $v['robots']) as $d) {
+      $d = trim($d);
+      if ($d === 'noindex' || $d === 'nofollow') $robots[$d] = true;
+    }
+    if (!empty($robots['noindex'])) unset($robots['index']);
+    if (!empty($robots['nofollow'])) unset($robots['follow']);
+    return $robots;
   }
 
   /**
@@ -135,8 +151,8 @@ class Visibility_SEO_Head {
     if ($v['description'] !== '') {
       printf("<meta name=\"description\" content=\"%s\" />\n", esc_attr($v['description']));
     }
-    if ($v['robots'] !== '') {
-      // Core prints its own robots tag only for noindex sites; ours is per page.
+    if ($v['robots'] !== '' && !function_exists('wp_robots')) {
+      // WordPress before 5.7 has no wp_robots(); print our own tag there.
       printf("<meta name=\"robots\" content=\"%s\" />\n", esc_attr($v['robots']));
     }
     if ($v['canonicalSet']) {

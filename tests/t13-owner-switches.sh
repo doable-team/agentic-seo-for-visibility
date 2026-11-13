@@ -2,7 +2,7 @@
 # T13 / #273: the plugin enforces "publishing off" and "paused" itself.
 cd "$(dirname "$0")"; . ./lib.sh
 S=1
-D=$($WP $S post create --post_status=draft --post_title="T13 draft $RANDOM" --porcelain | tr -d '\r')
+D=$($WP $S post create --post_status=draft --post_title="T13 draft $RANDOM" --porcelain | tr -d '\r' | tail -1)
 status() { $WP $S post get $D --field=post_status; }
 
 # Never set -> allowed (as before).

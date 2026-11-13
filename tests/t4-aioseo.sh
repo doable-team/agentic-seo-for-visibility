@@ -3,7 +3,7 @@
 # for an AIOSEO site show in the rendered <head>.
 cd "$(dirname "$0")"; . ./lib.sh
 S=4
-ID=$($WP $S post create --post_type=page --post_status=publish --post_title="T4 AIOSEO page" --post_content="<p>Body text.</p>" --porcelain | tr -d '\r')
+ID=$($WP $S post create --post_type=page --post_status=publish --post_title="T4 AIOSEO page" --post_content="<p>Body text.</p>" --porcelain | tr -d '\r' | tail -1)
 TAG=$RANDOM
 R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"AIOSEO Title $TAG\",\"metaDescription\":\"AIOSEO description $TAG\",\"canonical\":\"https://example.com/canon-$TAG/\",\"ogTitle\":\"OG $TAG\",\"robotsNoindex\":true}}")
 check "$(echo "$R" | jget "['ok']")" "True" "seo_meta.update ok ($R)"
