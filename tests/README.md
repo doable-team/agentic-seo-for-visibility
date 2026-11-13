@@ -19,3 +19,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t12-reliability.sh` + `mock-api.py` — an approved request runs once when the report fails, and when push and cron race (#272).
 - `t3-schema.sh` + `jsonld-check.py` — injected JSON-LD appears exactly once on no-plugin, Yoast, Rank Math and AIOSEO sites (#267).
 - `baseline.sh <ref> <test>` — run a check against an older plugin version (e.g. `5ffda1f` = 0.9.1).
+- `t15-internal-links.sh` — internal_link.suggest links a phrase once, not in links/headings/code; 0 links is an error (#266).
+- `unit/run.sh` — standalone PHP unit tests (no WordPress) on PHP 7.4 and 8.3.

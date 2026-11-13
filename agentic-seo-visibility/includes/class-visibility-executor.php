@@ -228,32 +228,58 @@ class Visibility_Executor {
 
   private static function exec_internal_link_suggest($payload) {
     $post_id = intval($payload['postId'] ?? 0);
-    if (!$post_id) return [false, null, 'postId required'];
+    if (!$post_id) return self::fail('invalid', 'postId required');
     $suggestions = isset($payload['suggestions']) && is_array($payload['suggestions']) ? $payload['suggestions'] : [];
-    if (empty($suggestions)) return [false, null, 'suggestions required'];
+    if (empty($suggestions)) return self::fail('invalid', 'suggestions required');
 
     $post = get_post($post_id);
-    if (!$post) return [false, null, 'post not found'];
+    if (!$post) return self::fail('not_found', 'post not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
+    }
     $content = $post->post_content;
-    $applied = 0;
+    $applied = [];
+    $not_found = [];
 
     foreach ($suggestions as $sug) {
       $phrase = isset($sug['phrase']) ? (string) $sug['phrase'] : '';
       $target = isset($sug['targetPostId']) ? intval($sug['targetPostId']) : 0;
-      if ($phrase === '' || $target <= 0) continue;
-      $target_url = get_permalink($target);
-      if (!$target_url) continue;
-      // Single replacement per phrase, only if not already linked.
-      $pattern = '/(?<!<a[^>]*>)\b' . preg_quote($phrase, '/') . '\b(?![^<]*<\/a>)/u';
-      $replacement = '<a href="' . esc_url($target_url) . '">' . esc_html($phrase) . '</a>';
-      $new = preg_replace($pattern, $replacement, $content, 1, $count);
-      if ($count > 0 && is_string($new)) {
-        $content = $new;
-        $applied += 1;
+      if ($phrase === '' || $target <= 0 || $target === $post_id) {
+        $not_found[] = ['phrase' => $phrase, 'targetPostId' => $target, 'reason' => 'invalid suggestion'];
+        continue;
       }
+      $target_url = get_permalink($target);
+      if (!$target_url || get_post_status($target) !== 'publish') {
+        $not_found[] = ['phrase' => $phrase, 'targetPostId' => $target, 'reason' => 'target is not a published post'];
+        continue;
+      }
+      if (Visibility_Links::links_to($content, $target_url)) {
+        $not_found[] = ['phrase' => $phrase, 'targetPostId' => $target, 'reason' => 'already linked'];
+        continue;
+      }
+      // Walks text nodes only: never inside a link, heading, code or block comment.
+      list($new, $done) = Visibility_Links::link_phrase($content, $phrase, $target_url);
+      if (!$done) {
+        $not_found[] = ['phrase' => $phrase, 'targetPostId' => $target, 'reason' => 'phrase not found in linkable text'];
+        continue;
+      }
+      $content = $new;
+      $applied[] = ['phrase' => $phrase, 'targetPostId' => $target, 'url' => $target_url];
     }
-    wp_update_post(['ID' => $post_id, 'post_content' => $content], true);
-    return [true, ['postId' => $post_id, 'linksApplied' => $applied], null];
+    if (empty($applied)) {
+      // Nothing changed: say so, and don't create an empty revision.
+      self::$last_error_code = 'not_applied';
+      return [false, ['postId' => $post_id, 'linksApplied' => 0, 'applied' => [], 'notFound' => $not_found], 'No link could be added: ' . implode('; ', array_map(function ($n) { return '"' . $n['phrase'] . '" (' . $n['reason'] . ')'; }, $not_found))];
+    }
+    $saved = Visibility_Content::save(['ID' => $post_id, 'post_content' => $content]);
+    if (is_wp_error($saved)) return self::fail('save_failed', $saved->get_error_message());
+    return [true, [
+      'postId'       => $post_id,
+      'linksApplied' => count($applied),
+      'applied'      => $applied,
+      'notFound'     => $not_found,
+      'modifiedGmt'  => Visibility_Content::modified_gmt($post_id),
+    ], null];
   }
 
   // ─── Media ─────────────────────────────────────────────────────────────
