@@ -15,3 +15,4 @@ runs WP-CLI against the site, and the plugin copied into each site.
 
 - `lint.sh` — `php -l` on every plugin file under PHP 7.4 and 8.3.
 - `t11-custom-html.sh` — editing one block leaves a Custom HTML block byte-identical (#276).
+- `t4-aioseo.sh` — AIOSEO title/description/canonical/robots/OG show in the rendered head (#268).

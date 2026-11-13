@@ -411,15 +411,6 @@ class Visibility_Executor {
           'robotsNoindex'   => 'rank_math_robots',  // value is array; serialized below
           'robotsNofollow'  => 'rank_math_robots',
         ];
-      case 'aioseo':
-        // AIOSEO stores everything in its own custom table; we fall back to
-        // standard postmeta keys that AIOSEO also writes on save_post.
-        return [
-          'metaTitle'       => '_aioseo_title',
-          'metaDescription' => '_aioseo_description',
-          'focusKeyword'    => '_aioseo_keyphrases',
-          'canonical'       => '_aioseo_canonical_url',
-        ];
       default:
         return [];
     }
@@ -439,6 +430,10 @@ class Visibility_Executor {
       // fields are kept verbatim so that installing a real SEO plugin later is
       // a clean handover: our renderer stands down, and nothing was lost.
       return self::store_seo_meta_fallback($post_id, $fields);
+    }
+
+    if ($plugin === 'aioseo') {
+      return self::write_aioseo($post_id, $fields);
     }
 
     $keys = self::seo_meta_keys($plugin);
@@ -467,6 +462,103 @@ class Visibility_Executor {
       update_post_meta($post_id, $meta_key, is_scalar($value) ? sanitize_text_field((string) $value) : $value);
     }
     return [true, ['postId' => $post_id, 'seoPlugin' => $plugin], null];
+  }
+
+  /**
+   * All in One SEO 4.x/5.x keeps per-post SEO in its own `aioseo_posts` table,
+   * not post meta, so meta written with update_post_meta never reaches the page.
+   * Write through AIOSEO's own Post model (which also syncs its localisation
+   * meta and fires `aioseo_insert_post`), then read the row back and fail if
+   * AIOSEO did not keep what we asked for.
+   */
+  private static function write_aioseo($post_id, $fields) {
+    $model = 'AIOSEO\\Plugin\\Common\\Models\\Post';
+    if (!class_exists($model) || !function_exists('aioseo')) {
+      return [false, null, 'All in One SEO is active but its Post model is not available.'];
+    }
+    $current = $model::getPost($post_id);
+    $data = [];
+    $written = [];
+    $unsupported = [];
+    $text = function ($v) { return $v === null ? '' : sanitize_text_field((string) $v); };
+    foreach ($fields as $key => $value) {
+      switch ($key) {
+        case 'metaTitle':       $data['title'] = $text($value); break;
+        case 'metaDescription': $data['description'] = $text($value); break;
+        case 'canonical':       $data['canonicalUrl'] = $value ? esc_url_raw((string) $value) : ''; break;
+        case 'ogTitle':         $data['og_title'] = $text($value); break;
+        case 'ogDescription':   $data['og_description'] = $text($value); break;
+        case 'ogImage':
+          $data['og_image_type']       = $value ? 'custom_image' : 'default';
+          $data['og_image_custom_url'] = $value ? esc_url_raw((string) $value) : '';
+          break;
+        case 'twitterTitle':       $data['twitter_title'] = $text($value); $data['twitter_use_og'] = false; break;
+        case 'twitterDescription': $data['twitter_description'] = $text($value); $data['twitter_use_og'] = false; break;
+        case 'twitterImage':
+          $data['twitter_use_og']           = false;
+          $data['twitter_image_type']       = $value ? 'custom_image' : 'default';
+          $data['twitter_image_custom_url'] = $value ? esc_url_raw((string) $value) : '';
+          break;
+        case 'focusKeyword':
+          $kw = $text($value);
+          $data['focus_keyword'] = $kw;
+          $kp = json_decode(wp_json_encode($current->keyphrases ?: new \stdClass()), true);
+          if (!is_array($kp)) $kp = [];
+          if (!isset($kp['focus']) || !is_array($kp['focus'])) $kp['focus'] = [];
+          $kp['focus']['keyphrase'] = $kw;
+          if (!isset($kp['additional'])) $kp['additional'] = [];
+          $data['keyphrases'] = $kp;
+          break;
+        case 'robotsNoindex':
+        case 'robotsNofollow':
+          // Per-post robots only apply when "use default settings" is off.
+          $noindex  = array_key_exists('robotsNoindex', $fields) ? (bool) $fields['robotsNoindex'] : (bool) $current->robots_noindex;
+          $nofollow = array_key_exists('robotsNofollow', $fields) ? (bool) $fields['robotsNofollow'] : (bool) $current->robots_nofollow;
+          $data['default']  = !$noindex && !$nofollow;
+          $data['noindex']  = $noindex;
+          $data['nofollow'] = $nofollow;
+          break;
+        case 'cornerstone':
+          $data['pillar_content'] = (bool) $value;
+          break;
+        default:
+          if ($key !== 'schemaJsonLd') $unsupported[] = $key;
+          continue 2;
+      }
+      $written[] = $key;
+    }
+    if (array_key_exists('schemaJsonLd', $fields)) {
+      $written[] = 'schemaJsonLd';
+    }
+    if (!empty($data)) {
+      $err = $model::savePost($post_id, $data);
+      if (is_string($err) && $err !== '') return [false, null, 'All in One SEO could not save: ' . $err];
+      if (isset(aioseo()->meta->metaData) && method_exists(aioseo()->meta->metaData, 'bustPostCache')) {
+        aioseo()->meta->metaData->bustPostCache($post_id);
+      }
+      clean_post_cache($post_id);
+      // Read back what AIOSEO will output from.
+      $saved = $model::getPost($post_id);
+      $checks = ['title' => 'metaTitle', 'description' => 'metaDescription', 'canonical_url' => 'canonical', 'og_title' => 'ogTitle', 'og_description' => 'ogDescription'];
+      $col = ['title' => 'title', 'description' => 'description', 'canonicalUrl' => 'canonical_url', 'og_title' => 'og_title', 'og_description' => 'og_description'];
+      foreach ($col as $in => $column) {
+        if (!array_key_exists($in, $data)) continue;
+        $want = (string) $data[$in];
+        $got  = (string) $saved->{$column};
+        if ($want !== $got) {
+          return [false, null, sprintf('All in One SEO did not keep %s (asked "%s", stored "%s").', $checks[$column], $want, $got)];
+        }
+      }
+    }
+    if (array_key_exists('schemaJsonLd', $fields)) {
+      update_post_meta($post_id, '_visibility_schema_jsonld', wp_json_encode($fields['schemaJsonLd']));
+    }
+    return [true, [
+      'postId'            => $post_id,
+      'seoPlugin'         => 'aioseo',
+      'fields'            => $written,
+      'unsupportedFields' => $unsupported,
+    ], null];
   }
 
   /**
