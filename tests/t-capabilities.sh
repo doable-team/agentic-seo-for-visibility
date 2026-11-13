@@ -12,7 +12,7 @@ check "$(c "'litespeed-cache' in [x['slug'] for x in d['caches']]")" "True" "cac
 check "$(c "['theme']['blockTheme']")" "False" "classic theme reported"
 check "$(c "['editor']")" "classic" "Classic Editor -> editor classic"
 check "$(c "sorted(p['name'] for p in d['postTypes'] if p['name'] in ('post','page'))")" "['page', 'post']" "post types post + page"
-check "$(c "[p['name'] for p in d['postTypes'] if p['name'] in ('attachment','elementor_library','e-floating-buttons')]")" "[]" "attachments and Elementor templates not listed"
+check "$(c "list(p['name'] for p in d['postTypes'] if p['name'] in ('attachment','elementor_library','e-floating-buttons'))")" "[]" "attachments and Elementor templates not listed"
 check "$(c "['permissions']")" "{'allowPublish': True, 'paused': False}" "owner switches"
 C1=$(api 1 GET /capabilities)
 check "$(echo "$C1" | jget "['seo']['plugin']")" "None" "site 1: no SEO plugin"
