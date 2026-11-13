@@ -63,11 +63,9 @@ register_activation_hook(__FILE__, function () {
   Visibility_Requests::activate_cron();
 });
 register_deactivation_hook(__FILE__, function () {
-  $ts = wp_next_scheduled('visibility_daily_heartbeat');
-  if ($ts) {
-    wp_unschedule_event($ts, 'visibility_daily_heartbeat');
-  }
-  Visibility_Requests::deactivate_cron();
+  // Every occurrence, not just the next one.
+  wp_clear_scheduled_hook('visibility_daily_heartbeat');
+  wp_clear_scheduled_hook(Visibility_Requests::CRON_HOOK);
 });
 add_action('visibility_daily_heartbeat', function () {
   Visibility_Client::heartbeat();

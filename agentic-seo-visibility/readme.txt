@@ -87,7 +87,7 @@ On pairing and once a day for heartbeats, the plugin sends your site URL, site n
 
 = How do I uninstall the plugin? =
 
-Deactivate it from the Plugins screen, then delete it. Disconnect from Agentic SEO → Connection **before** deleting if you also want Visibility to forget this site.
+Deactivate it from the Plugins screen, then delete it. On deactivation the scheduled tasks are removed; on delete the plugin removes its connection key (`visibility_site_token`), every other `visibility_*` setting, its temporary data and its scheduled tasks. SEO fields it saved on your posts are kept, since your pages may rely on them (define `VISIBILITY_UNINSTALL_DELETE_POST_META` as true in wp-config.php to remove those too). Your data in Visibility is untouched; disconnect **before** deleting if you also want Visibility to forget this site.
 
 = What WordPress and PHP versions does it require? =
 
