@@ -46,6 +46,14 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
 
+    // What the site has: versions, theme, post types, SEO plugin, builders,
+    // custom fields, caches, languages, WooCommerce, the owner's switches.
+    register_rest_route('visibility/v1', '/capabilities', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'capabilities'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // ─── Event receivers (server → plugin pushes) ──────────────────────
     //
     // The Visibility server pushes events here whenever something
@@ -231,6 +239,10 @@ class Visibility_REST {
       'allowPublish' => Visibility_Policy::publishing_allowed(),
       'disabled'     => Visibility_Policy::paused(),
     ]);
+  }
+
+  public function capabilities(WP_REST_Request $request) {
+    return rest_ensure_response(Visibility_Read::capabilities());
   }
 
   public function health(WP_REST_Request $request) {

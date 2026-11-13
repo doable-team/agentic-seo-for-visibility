@@ -23,12 +23,15 @@ class Visibility_Read {
 
   // ─── Post types ────────────────────────────────────────────────────────
 
-  /** Post types agents may see: public ones with a UI, never attachments. */
+  /** Builder/theme internals that are "public" but are not site content. */
+  const INTERNAL_TYPES = ['attachment', 'elementor_library', 'e-floating-buttons', 'e-landing-page', 'et_pb_layout', 'fl-builder-template', 'bricks_template', 'ct_template', 'breakdance_template', 'wp_block', 'wp_template', 'wp_template_part', 'wp_navigation'];
+
+  /** Post types agents may see: public ones with a UI, never attachments or builder templates. */
   public static function readable_types() {
     $types = get_post_types(['public' => true], 'objects');
     $out = [];
     foreach ($types as $name => $obj) {
-      if ($name === 'attachment' || empty($obj->show_ui)) continue;
+      if (in_array($name, self::INTERNAL_TYPES, true) || empty($obj->show_ui)) continue;
       $out[$name] = $obj;
     }
     /** Lets a site hide post types from Visibility. */
@@ -146,5 +149,126 @@ class Visibility_Read {
       }, array_values($terms));
     }
     return (object) $out;
+  }
+
+  // ─── Capabilities ──────────────────────────────────────────────────────
+
+  public static function capabilities() {
+    if (!function_exists('get_plugins')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    $theme = wp_get_theme();
+    $seo = Visibility_SEO::adapter();
+
+    $post_types = [];
+    foreach (self::readable_types() as $name => $obj) {
+      $counts = wp_count_posts($name);
+      $c = [];
+      foreach (['publish', 'draft', 'pending', 'future', 'private'] as $st) $c[$st] = isset($counts->$st) ? (int) $counts->$st : 0;
+      $supports = array_keys(array_filter((array) get_all_post_type_supports($name)));
+      $post_types[] = [
+        'name'         => $name,
+        'label'        => $obj->labels->name,
+        'hierarchical' => (bool) $obj->hierarchical,
+        'supports'     => $supports,
+        'editor'       => self::type_editor($name),
+        'writable'     => in_array($name, ['post', 'page'], true),
+        'counts'       => $c,
+      ];
+    }
+
+    $builders = [];
+    foreach (self::BUILDERS as $slug => $def) {
+      if (defined($def[1])) $builders[] = ['slug' => $slug, 'name' => $def[0], 'version' => (string) constant($def[1]), 'writable' => false];
+    }
+
+    $custom_fields = [];
+    if (class_exists('ACF')) $custom_fields[] = ['slug' => 'acf', 'name' => defined('ACF_PRO') ? 'Advanced Custom Fields Pro' : 'Advanced Custom Fields', 'version' => defined('ACF_VERSION') ? ACF_VERSION : null, 'writable' => false];
+    if (defined('RWMB_VER')) $custom_fields[] = ['slug' => 'metabox', 'name' => 'Meta Box', 'version' => RWMB_VER, 'writable' => false];
+    if (defined('PODS_VERSION')) $custom_fields[] = ['slug' => 'pods', 'name' => 'Pods', 'version' => PODS_VERSION, 'writable' => false];
+    if (class_exists('Jet_Engine')) $custom_fields[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => defined('JET_ENGINE_VERSION') ? JET_ENGINE_VERSION : null, 'writable' => false];
+
+    $redirects = null;
+    if (defined('REDIRECTION_VERSION')) $redirects = ['slug' => 'redirection', 'name' => 'Redirection', 'version' => REDIRECTION_VERSION];
+    elseif (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB')) $redirects = ['slug' => 'rankmath', 'name' => 'Rank Math redirections', 'version' => RANK_MATH_VERSION];
+
+    $caches = [];
+    $cache_defs = [
+      'wp-rocket'        => ['WP Rocket', 'WP_ROCKET_VERSION'],
+      'litespeed-cache'  => ['LiteSpeed Cache', 'LSCWP_V'],
+      'w3-total-cache'   => ['W3 Total Cache', 'W3TC_VERSION'],
+      'wp-super-cache'   => ['WP Super Cache', 'WPCACHEHOME'],
+      'wp-fastest-cache' => ['WP Fastest Cache', 'WPFC_WP_PLUGIN_DIR'],
+      'sg-cachepress'    => ['SiteGround Speed Optimizer', 'SiteGround_Optimizer\\VERSION'],
+      'cloudflare'       => ['Cloudflare', 'CLOUDFLARE_PLUGIN_DIR'],
+      'breeze'           => ['Breeze', 'BREEZE_VERSION'],
+    ];
+    foreach ($cache_defs as $slug => $def) {
+      if (defined($def[1])) {
+        $v = constant($def[1]);
+        $caches[] = ['slug' => $slug, 'name' => $def[0], 'version' => preg_match('/^\d/', (string) $v) ? (string) $v : null];
+      }
+    }
+    if (class_exists('WpeCommon')) $caches[] = ['slug' => 'wpengine', 'name' => 'WP Engine cache', 'version' => null];
+    if (defined('KINSTAMU_VERSION')) $caches[] = ['slug' => 'kinsta', 'name' => 'Kinsta cache', 'version' => KINSTAMU_VERSION];
+
+    $multilingual = null;
+    if (function_exists('pll_languages_list')) {
+      $multilingual = ['slug' => 'polylang', 'name' => 'Polylang', 'version' => defined('POLYLANG_VERSION') ? POLYLANG_VERSION : null, 'languages' => array_values((array) pll_languages_list()), 'default' => function_exists('pll_default_language') ? pll_default_language() : null];
+    } elseif (defined('ICL_SITEPRESS_VERSION')) {
+      $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+      $multilingual = ['slug' => 'wpml', 'name' => 'WPML', 'version' => ICL_SITEPRESS_VERSION, 'languages' => is_array($langs) ? array_keys($langs) : [], 'default' => apply_filters('wpml_default_language', null)];
+    } elseif (class_exists('TRP_Translate_Press')) {
+      $multilingual = ['slug' => 'translatepress', 'name' => 'TranslatePress', 'version' => defined('TRP_PLUGIN_VERSION') ? TRP_PLUGIN_VERSION : null, 'languages' => [], 'default' => null];
+    }
+
+    $next = function ($hook) {
+      $ts = wp_next_scheduled($hook);
+      return $ts ? gmdate('Y-m-d\TH:i:s\Z', $ts) : null;
+    };
+
+    return [
+      'pluginVersion' => VISIBILITY_PLUGIN_VERSION,
+      'wpVersion'     => get_bloginfo('version'),
+      'phpVersion'    => PHP_VERSION,
+      'multisite'     => is_multisite(),
+      'siteUrl'       => home_url('/'),
+      'locale'        => get_locale(),
+      'theme'         => [
+        'slug'       => $theme->get_stylesheet(),
+        'name'       => $theme->get('Name'),
+        'version'    => $theme->get('Version'),
+        'blockTheme' => function_exists('wp_is_block_theme') ? (bool) wp_is_block_theme() : false,
+        'childTheme' => is_child_theme(),
+        'parent'     => is_child_theme() ? $theme->get_template() : null,
+      ],
+      'editor'        => self::type_editor('post'),
+      'postTypes'     => $post_types,
+      'seo'           => [
+        'plugin'     => $seo->slug(),
+        'name'       => $seo->name(),
+        'version'    => $seo->version(),
+        'writable'   => $seo->writable(),
+        'fields'     => $seo->writable() ? $seo->fields() : [],
+        'termSeo'    => $seo->writable() && !empty($seo->term_fields()),
+        'termFields' => $seo->writable() ? $seo->term_fields() : [],
+        'schema'     => $seo->writable(),
+        'renderedBy' => $seo->slug() === null ? 'visibility' : $seo->slug(),
+      ],
+      'builders'      => $builders,
+      'customFields'  => $custom_fields,
+      'redirects'     => $redirects,
+      'caches'        => $caches,
+      'multilingual'  => $multilingual,
+      'woocommerce'   => defined('WC_VERSION') ? ['version' => WC_VERSION] : null,
+      'permissions'   => [
+        'allowPublish' => Visibility_Policy::publishing_allowed(),
+        'paused'       => Visibility_Policy::paused(),
+      ],
+      'cron'          => [
+        'wpCronDisabled' => defined('DISABLE_WP_CRON') && DISABLE_WP_CRON,
+        'nextPull'       => $next('visibility_pull_approved_requests'),
+        'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
+      ],
+      'features'      => ['read.rich', 'posts.types', 'content.modifiedGmt', 'requests.dedupe', 'policy.enforced'],
+    ];
   }
 }
