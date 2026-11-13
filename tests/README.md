@@ -17,3 +17,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t11-custom-html.sh` — editing one block leaves a Custom HTML block byte-identical (#276).
 - `t4-aioseo.sh` — AIOSEO title/description/canonical/robots/OG show in the rendered head (#268).
 - `t12-reliability.sh` + `mock-api.py` — an approved request runs once when the report fails, and when push and cron race (#272).
+- `t3-schema.sh` + `jsonld-check.py` — injected JSON-LD appears exactly once on no-plugin, Yoast, Rank Math and AIOSEO sites (#267).
+- `baseline.sh <ref> <test>` — run a check against an older plugin version (e.g. `5ffda1f` = 0.9.1).

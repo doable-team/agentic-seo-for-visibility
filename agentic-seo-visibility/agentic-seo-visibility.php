@@ -33,6 +33,7 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-rest.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-executor.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-requests.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-head.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-schema.php';
 
 add_action('plugins_loaded', function () {
   new Visibility_Settings();
@@ -40,6 +41,8 @@ add_action('plugins_loaded', function () {
   Visibility_Requests::init();
   // Emits SEO tags itself while no SEO plugin is installed; silent once one is.
   Visibility_SEO_Head::init();
+  // Merges stored JSON-LD into the active SEO plugin's own schema graph.
+  Visibility_Schema::init();
 });
 
 // Register the 5-minute schedule the action-request cron uses.

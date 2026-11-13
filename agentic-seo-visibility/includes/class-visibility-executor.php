@@ -452,12 +452,14 @@ class Visibility_Executor {
 
     $keys = self::seo_meta_keys($plugin);
     foreach ($fields as $key => $value) {
-      if (!isset($keys[$key])) continue;
-      $meta_key = $keys[$key];
+      // Handled before the key lookup: no SEO plugin has a meta key for it.
+      // Visibility_Schema merges it into the plugin's own graph on output.
       if ($key === 'schemaJsonLd') {
-        update_post_meta($post_id, '_visibility_schema_jsonld', wp_json_encode($value));
+        Visibility_Schema::store($post_id, $value);
         continue;
       }
+      if (!isset($keys[$key])) continue;
+      $meta_key = $keys[$key];
       if ($key === 'robotsNoindex' || $key === 'robotsNofollow') {
         if ($plugin === 'yoast') {
           update_post_meta($post_id, $meta_key, $value ? '1' : '');
@@ -565,7 +567,7 @@ class Visibility_Executor {
       }
     }
     if (array_key_exists('schemaJsonLd', $fields)) {
-      update_post_meta($post_id, '_visibility_schema_jsonld', wp_json_encode($fields['schemaJsonLd']));
+      Visibility_Schema::store($post_id, $fields['schemaJsonLd']);
     }
     return [true, [
       'postId'            => $post_id,
@@ -589,7 +591,7 @@ class Visibility_Executor {
     $written = [];
     foreach ($fields as $key => $value) {
       if ($key === 'schemaJsonLd') {
-        update_post_meta($post_id, '_visibility_schema_jsonld', wp_json_encode($value));
+        Visibility_Schema::store($post_id, $value);
         $written[] = $key;
         continue;
       }

@@ -115,12 +115,11 @@ class Visibility_SEO_Head {
     printf("<meta name=\"twitter:card\" content=\"%s\" />\n", $og_image !== '' ? 'summary_large_image' : 'summary');
 
     // Structured data the executor has been storing since 0.7.x, finally rendered.
-    $schema = get_post_meta($post_id, '_visibility_schema_jsonld', true);
-    if (is_string($schema) && trim($schema) !== '') {
-      $decoded = json_decode($schema, true);
-      if (is_array($decoded)) {
-        printf("<script type=\"application/ld+json\">%s</script>\n", wp_json_encode($decoded));
-      }
+    $schema = class_exists('Visibility_Schema') ? Visibility_Schema::get($post_id) : null;
+    if (is_array($schema)) {
+      if (!isset($schema['@context']) && !isset($schema[0])) $schema = ['@context' => 'https://schema.org'] + $schema;
+      if (isset($schema[0])) $schema = ['@context' => 'https://schema.org', '@graph' => Visibility_Schema::nodes($post_id)];
+      printf("<script type=\"application/ld+json\">%s</script>\n", wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG));
     }
 
     echo "<!-- /Agentic SEO for Visibility -->\n";
