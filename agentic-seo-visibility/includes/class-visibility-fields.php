@@ -98,6 +98,33 @@ class Visibility_Fields {
     return $out;
   }
 
+  private static function schema_acf($type, $post_id) {
+    if (!function_exists('acf_get_field_groups') || !function_exists('acf_get_fields')) return [];
+    $groups = $post_id ? acf_get_field_groups(['post_id' => (int) $post_id]) : acf_get_field_groups(['post_type' => $type]);
+    $out = [];
+    foreach ((array) $groups as $g) {
+      foreach ((array) acf_get_fields($g) as $f) {
+        $out[] = self::acf_field($f, $g['title']);
+      }
+    }
+    return $out;
+  }
+
+  private static function acf_field($f, $group) {
+    $type = (string) $f['type'];
+    $o = ['key' => 'acf:' . $f['key'], 'label' => $f['label'] !== '' ? $f['label'] : $f['name'], 'type' => $type, 'group' => $group, 'source' => 'acf', 'metaKey' => $f['name'], 'name' => $f['name']];
+    if (!empty($f['choices']) && is_array($f['choices'])) $o['choices'] = array_map('strval', array_keys($f['choices']));
+    if (in_array($type, ['repeater', 'group'], true) && !empty($f['sub_fields'])) {
+      $o['subFields'] = array_map(function ($s) {
+        $x = ['key' => $s['key'], 'name' => $s['name'], 'label' => $s['label'], 'type' => $s['type']];
+        if (!empty($s['choices']) && is_array($s['choices'])) $x['choices'] = array_map('strval', array_keys($s['choices']));
+        return $x;
+      }, $f['sub_fields']);
+    }
+    if (!in_array($type, self::ACF_WRITABLE, true)) $o['readOnly'] = true;
+    return $o;
+  }
+
   // ─── Values ────────────────────────────────────────────────────────────
 
   /** Fields of a post with their current values (the read endpoint's `fields`). */
@@ -112,6 +139,10 @@ class Visibility_Fields {
 
   public static function get_value($post_id, array $f) {
     switch ($f['source']) {
+      case 'acf':
+        $v = get_field(substr($f['key'], 4), $post_id, false);
+        if ($f['type'] === 'image' && $v) return self::image_value((int) $v);
+        return $v;
       default:
         $v = get_post_meta($post_id, $f['metaKey'], true);
         return $v;
@@ -257,6 +288,9 @@ class Visibility_Fields {
 
   private static function write($post_id, array $f, $value) {
     switch ($f['source']) {
+      case 'acf':
+        $ok = update_field(substr($f['key'], 4), $value, $post_id);
+        return $ok === false && self::get_value($post_id, $f) !== $value ? new WP_Error('save_failed', sprintf('ACF did not save %s', $f['key'])) : true;
       default:
         if ($value === null || $value === '') delete_post_meta($post_id, $f['metaKey']);
         else update_post_meta($post_id, $f['metaKey'], is_string($value) ? wp_slash($value) : $value);
@@ -267,7 +301,7 @@ class Visibility_Fields {
   /** Field plugins and theme options this site has, for /capabilities. */
   public static function sources() {
     $out = [];
-    if (class_exists('ACF')) $out[] = ['slug' => 'acf', 'name' => defined('ACF_PRO') ? 'Advanced Custom Fields Pro' : 'Advanced Custom Fields', 'version' => defined('ACF_VERSION') ? ACF_VERSION : null, 'writable' => false];
+    if (class_exists('ACF')) $out[] = ['slug' => 'acf', 'name' => defined('ACF_PRO') ? 'Advanced Custom Fields Pro' : 'Advanced Custom Fields', 'version' => defined('ACF_VERSION') ? ACF_VERSION : null, 'writable' => true];
     if (defined('RWMB_VER')) $out[] = ['slug' => 'metabox', 'name' => 'Meta Box', 'version' => RWMB_VER, 'writable' => false];
     if (defined('PODS_VERSION')) $out[] = ['slug' => 'pods', 'name' => 'Pods', 'version' => PODS_VERSION, 'writable' => false];
     if (class_exists('Jet_Engine')) $out[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => defined('JET_ENGINE_VERSION') ? JET_ENGINE_VERSION : null, 'writable' => false];

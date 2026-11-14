@@ -160,6 +160,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Elementor pages:** headings, text, buttons and image alt text in
   Elementor widgets can be changed. Changes are saved through Elementor
   itself, so its styles are rebuilt and the page still opens in Elementor.
+* **Advanced Custom Fields (free and Pro):** text, textarea, rich text, URL,
+  email, image, number, select, true/false and group fields (plus repeater
+  rows on ACF Pro) can be read and, when allowed, changed by field key.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
