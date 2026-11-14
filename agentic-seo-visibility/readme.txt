@@ -169,9 +169,10 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Pods:** text, paragraph, rich text, website, email, phone, number,
   currency, yes/no, simple list and image fields on the post types Pods
   extends, read and changed through Pods itself when allowed.
-* **Theme page options:** Astra, GeneratePress, Kadence and OceanWP per-page options (layouts, hiding the
-  title, breadcrumbs, header or footer, transparent and sticky header) are
-  listed for agents and can only be changed once you allow them.
+* **Theme page options:** Astra, GeneratePress, Kadence and OceanWP
+  per-page options (layouts, hiding the title, breadcrumbs, header or
+  footer, transparent and sticky header) are listed for agents and can only
+  be changed once you allow them.
 * **WP Super Cache, W3 Total Cache, LiteSpeed Cache, WP Fastest Cache and
   SiteGround Speed Optimizer:** the changed page's cache is cleared after
   every change.
