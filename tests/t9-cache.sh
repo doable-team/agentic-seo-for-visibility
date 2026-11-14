@@ -19,6 +19,13 @@ check "$(api $S GET /capabilities | jget "'$NAME' in [x['name'] for x in d['cach
 R=$(action $S page.edit_parts "{\"postId\":$A,\"edits\":[{\"target\":{\"path\":\"0\"},\"op\":\"replace_text\",\"text\":\"A version two\"}]}")
 check "$(echo "$R" | jget "['ok']")" "True" "edit page A"
 check "$(echo "$R" | jget "d['result']['cachePurged']")" "['$NAME']" "result: cachePurged = ['$NAME']"
-grep -q 'A version two' <<<"$(get "$UA")" && ok "live page A shows the change at once" || bad "page A still stale"
+if [ "$NAME" = "W3 Total Cache" ]; then
+  # W3TC renames a purged page to *_old and may serve that copy for up to 30 s
+  # while it rebuilds the page (its own "serve stale while regenerating").
+  SLUG=$($WP $S post get $A --field=post_name | tr -d '\r')
+  check "$(docker exec viswp-$S sh -c "ls /var/www/html/wp-content/cache/page_enhanced/*/$SLUG/ 2>/dev/null | grep -c '^_index_slash.html\$'")" "0" "W3TC cache file for page A invalidated at once (renamed to _old)"
+  sleep 31; get "$UA" >/dev/null
+fi
+grep -q 'A version two' <<<"$(get "$UA")" && ok "live page A shows the change" || bad "page A still stale"
 grep -q 'B version one' <<<"$(get "$UB")" && ok "page B still cached: only the changed page was purged" || bad "page B purged too (whole-site purge?)"
 summary

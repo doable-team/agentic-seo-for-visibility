@@ -35,6 +35,21 @@ class Visibility_Cache {
           return true;
         },
       ],
+      // W3 Total Cache: page cache (and CDN) for this post only.
+      'w3-total-cache' => [
+        'W3 Total Cache',
+        function () { return function_exists('w3tc_flush_post'); },
+        function ($id, $url) {
+          w3tc_flush_post($id, true);
+          // W3TC queues the purge until shutdown; run it now so the page is
+          // fresh when Visibility reports the change as done.
+          if (class_exists('\\W3TC\\Dispatcher')) {
+            $flush = \W3TC\Dispatcher::component('CacheFlush');
+            if ($flush && method_exists($flush, 'execute_delayed_operations')) $flush->execute_delayed_operations();
+          }
+          return true;
+        },
+      ],
       // Cloudflare (official plugin, incl. APO): purge the post's URLs through
     ];
     /**
