@@ -11,7 +11,9 @@ in the plugin zip). Each site exposes the plugin with a fixed test token:
 | 4 | http://localhost:8184 | `vis-test-token-4` | Twenty Twenty-Five + All in One SEO |
 | 5 | http://localhost:8185 | `vis-test-token-5` | PHP 7.4 + WordPress 6.0, no SEO plugin |
 | 6 | http://localhost:8186 | `vis-test-token-6` | Astra + Elementor + Rank Math (T3) |
-| 7 | http://localhost:8187 | `vis-test-token-7` | ACF + The SEO Framework (T6) |
+| 7 | http://localhost:8187 | `vis-test-token-7` | ACF + The SEO Framework + Meta Box + Pods (T6), Astra/GeneratePress/Kadence/OceanWP installed |
+| 8 | http://localhost:8188 | `vis-test-token-8` | Twenty Twenty-Five + SEOPress |
+| 9 | http://localhost:8189 | `vis-test-token-9` | Twenty Twenty-Five + Slim SEO |
 
 Sites are created with `/home/tulasinath/viswp/site.sh <n> <php> [wp-version]`
 (MariaDB container `viswp-db`, WP admin `admin`/`admin`); `sync.sh` copies the
@@ -36,7 +38,7 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t-read.sh` — rich read of a page (type, editor, blocks with paths, SEO values + rendered, images), list by type/parent, stale modifiedGmt -> conflict (#284).
 - `t-capabilities.sh` — GET /capabilities on an Elementor + Yoast + WP Rocket (detection stub) + LiteSpeed site and the others (#294).
 - `t-seo-adapters.sh` + `head-check.py` — seo_meta.update on no-plugin, Yoast, Rank Math, AIOSEO sites: each tag once in the rendered head, before/after, unsupportedFields, clearing, category SEO (#287, #311–#313).
-- `t-seopress-standdown.sh` — on a SEOPress site our head prints nothing and writes are refused plainly (#282 in #287).
+- `t-seopress-standdown.sh` — on a SEOPress site our head prints nothing, fields land in SEOPress's keys, one title/description on the page, rollback (#282, #314). `t-seo-adapters.sh` and `t3-schema.sh` take `SITES=8` too.
 - `fixtures/og-1200x630.png` — test image (Rank Math only prints images of at least 200x200 from the media library).
 - `t-media.sh` — POST /media: alt, title, caption, readable file name, attached to the post, one upload per source URL, GET /media?id= (#310 plugin part).
 - `t2-classic.sh` — Classic Editor edit keeps shortcodes, wpautop paragraphs and embeds; `post.edit_parts` on classic paths (T2, #285).

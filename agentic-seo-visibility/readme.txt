@@ -145,6 +145,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
   ones you allow in Visibility, by name and checked by type. Fields outside
   your list, and anything that looks like a password, token or plugin
   internals, are always refused.
+* **SEOPress:** title, description, focus keyword, canonical, noindex,
+  nofollow, primary category, Facebook and Twitter fields, and category/tag
+  SEO are written into SEOPress. Structured data joins SEOPress's own graph.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

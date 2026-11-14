@@ -17,10 +17,49 @@ class Visibility_Schema {
 
   const META_KEY = '_visibility_schema_jsonld';
 
+  /** Set once the nodes went into an SEO plugin's graph on this request. */
+  private static $merged = false;
+
   public static function init() {
     add_filter('wpseo_schema_graph', [__CLASS__, 'yoast_graph'], 20, 2);
     add_filter('rank_math/json_ld', [__CLASS__, 'rankmath_json_ld'], 99, 2);
     add_filter('aioseo_schema_output', [__CLASS__, 'aioseo_graph'], 20, 1);
+    // SEOPress (single @graph, when its graph setting is on), The SEO
+    // Framework and Slim SEO: merge into their graph when they print one.
+    add_filter('seopress_schemas_graph', [__CLASS__, 'append_nodes'], 20, 1);
+    add_filter('the_seo_framework_schema_graph_data', [__CLASS__, 'append_nodes'], 20, 1);
+    add_filter('slim_seo_schema_graph', [__CLASS__, 'append_nodes'], 20, 1);
+    // Their graph can be turned off: then print ours once, at the very end.
+    add_action('wp_footer', [__CLASS__, 'fallback_script'], 999);
+  }
+
+  /** A plain list of nodes (SEOPress, The SEO Framework, Slim SEO). */
+  public static function append_nodes($graph) {
+    $id = self::current_post_id();
+    if (!$id || !is_array($graph) || self::$merged) return $graph;
+    $nodes = self::nodes($id);
+    if (!$nodes) return $graph;
+    foreach ($nodes as $node) $graph[] = $node;
+    self::$merged = true;
+    return $graph;
+  }
+
+  /**
+   * SEO plugins whose graph may be off: when no graph took our nodes, print
+   * them as our own JSON-LD block. Yoast, Rank Math and AIOSEO always print a
+   * graph; with no SEO plugin Visibility_SEO_Head prints it.
+   */
+  public static function fallback_script() {
+    if (self::$merged || !class_exists('Visibility_SEO')) return;
+    $slug = Visibility_SEO::adapter()->slug();
+    if (!in_array($slug, ['seopress', 'tsf', 'slimseo'], true)) return;
+    $id = self::current_post_id();
+    if (!$id) return;
+    $nodes = self::nodes($id);
+    if (!$nodes) return;
+    self::$merged = true;
+    $doc = ['@context' => 'https://schema.org', '@graph' => $nodes];
+    echo "<script type=\"application/ld+json\" class=\"visibility-schema\">" . wp_json_encode($doc, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . "</script>\n";
   }
 
   /** Store (or clear, on null/empty) the schema for a post. */

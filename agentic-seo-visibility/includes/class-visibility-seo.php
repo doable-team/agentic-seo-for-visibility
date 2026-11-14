@@ -648,6 +648,140 @@ class Visibility_SEO_Adapter_AIOSEO extends Visibility_SEO_Adapter {
   }
 }
 
+/**
+ * SEO plugins that keep each field in its own post meta (and the same keys in
+ * term meta): field => meta key, plus how booleans are stored.
+ */
+abstract class Visibility_SEO_Adapter_MetaMap extends Visibility_SEO_Adapter {
+  /** @return array canonical field => post meta key */
+  abstract protected function keys();
+  /** @return array canonical field => term meta key ([] = no term SEO) */
+  protected function term_keys() { return []; }
+  /** Stored value for "true" of a boolean field. */
+  protected function true_value($field) { return '1'; }
+  /** Meta that must be cleared when an image URL changes (stale attachment ids). */
+  protected function image_id_keys() { return []; }
+
+  public function fields() { return array_merge(array_keys($this->keys()), ['schemaJsonLd']); }
+  public function term_fields() { return array_keys($this->term_keys()); }
+
+  private function decode($f, $v) {
+    if (in_array($f, self::BOOL_FIELDS, true)) return $v === $this->true_value($f);
+    if ($f === 'primaryCategory') return $v !== '' ? (int) $v : null;
+    return $v;
+  }
+
+  private function encode($f, $v) {
+    if (in_array($f, self::BOOL_FIELDS, true)) return $v ? $this->true_value($f) : '';
+    if ($f === 'primaryCategory') return $v ? (string) (int) $v : '';
+    if (in_array($f, ['canonical', 'ogImage', 'twitterImage'], true)) return self::url($v);
+    return self::text($v);
+  }
+
+  public function read($post_id) {
+    $out = self::blank();
+    foreach ($this->keys() as $f => $key) $out[$f] = $this->decode($f, self::meta($post_id, $key));
+    return $out;
+  }
+
+  public function read_term($term_id, $taxonomy) {
+    $out = self::blank();
+    foreach ($this->term_keys() as $f => $key) {
+      $v = get_term_meta($term_id, $key, true);
+      $out[$f] = $this->decode($f, is_scalar($v) ? (string) $v : '');
+    }
+    return $out;
+  }
+
+  public function write($post_id, array $fields) {
+    list($take, $rest) = $this->partition($fields, array_keys($this->keys()));
+    $ids = $this->image_id_keys();
+    foreach ($take as $f => $v) {
+      self::set_meta($post_id, $this->keys()[$f], $this->encode($f, $v));
+      if (isset($ids[$f])) foreach ((array) $ids[$f] as $k) delete_post_meta($post_id, $k);
+    }
+    clean_post_cache($post_id);
+    return ['written' => array_keys($take), 'unsupported' => $rest];
+  }
+
+  public function write_term($term_id, $taxonomy, array $fields) {
+    list($take, $rest) = $this->partition($fields, array_keys($this->term_keys()));
+    $ids = $this->image_id_keys();
+    foreach ($take as $f => $v) {
+      $key = $this->term_keys()[$f];
+      $v = $this->encode($f, $v);
+      if ($v === '') delete_term_meta($term_id, $key); else update_term_meta($term_id, $key, wp_slash($v));
+      if (isset($ids[$f])) foreach ((array) $ids[$f] as $k) delete_term_meta($term_id, $k);
+    }
+    clean_term_cache($term_id, $taxonomy);
+    return ['written' => array_keys($take), 'unsupported' => $rest];
+  }
+}
+
+/** SEOPress (free + Pro: Pro stores its SEO data through the free plugin). */
+class Visibility_SEO_Adapter_SEOPress extends Visibility_SEO_Adapter_MetaMap {
+  const KEYS = [
+    'metaTitle'          => '_seopress_titles_title',
+    'metaDescription'    => '_seopress_titles_desc',
+    'focusKeyword'       => '_seopress_analysis_target_kw',
+    'canonical'          => '_seopress_robots_canonical',
+    'ogTitle'            => '_seopress_social_fb_title',
+    'ogDescription'      => '_seopress_social_fb_desc',
+    'ogImage'            => '_seopress_social_fb_img',
+    'twitterTitle'       => '_seopress_social_twitter_title',
+    'twitterDescription' => '_seopress_social_twitter_desc',
+    'twitterImage'       => '_seopress_social_twitter_img',
+    'robotsNoindex'      => '_seopress_robots_index',
+    'robotsNofollow'     => '_seopress_robots_follow',
+    'primaryCategory'    => '_seopress_robots_primary_cat',
+  ];
+  public function slug() { return 'seopress'; }
+  public function name() { return 'SEOPress'; }
+  public function version() { return defined('SEOPRESS_VERSION') ? SEOPRESS_VERSION : null; }
+  protected function keys() { return self::KEYS; }
+  /** Same keys on categories and tags (no focus keyword or primary category there). */
+  protected function term_keys() { return array_diff_key(self::KEYS, ['focusKeyword' => 1, 'primaryCategory' => 1]); }
+  /** SEOPress stores noindex/nofollow as "yes". */
+  protected function true_value($field) { return 'yes'; }
+  /** What SEOPress outputs, through the same services its editor uses. */
+  public function rendered($post_id) {
+    if (!function_exists('seopress_get_service')) return null;
+    $post = get_post($post_id);
+    if (!$post) return null;
+    try {
+      $ctx = seopress_get_service('ContextPage');
+      $title = seopress_get_service('TitleMeta');
+      $desc = seopress_get_service('DescriptionMeta');
+      if (!is_object($ctx) || !is_object($title) || !is_object($desc)) return null;
+      $c = $ctx->buildContextWithCurrentId($post->ID)->getContext();
+      $v = $this->read($post_id);
+      $t = (string) $title->getValue($c);
+      $d = (string) $desc->getValue($c);
+      return [
+        'title'              => $t,
+        'description'        => $d,
+        'canonical'          => $v['canonical'] !== '' ? $v['canonical'] : (string) get_permalink($post),
+        'robots'             => implode(', ', [$v['robotsNoindex'] ? 'noindex' : 'index', $v['robotsNofollow'] ? 'nofollow' : 'follow']),
+        'ogTitle'            => $v['ogTitle'] !== '' ? $v['ogTitle'] : $t,
+        'ogDescription'      => $v['ogDescription'] !== '' ? $v['ogDescription'] : $d,
+        'ogImage'            => $v['ogImage'],
+        'twitterTitle'       => $v['twitterTitle'] !== '' ? $v['twitterTitle'] : ($v['ogTitle'] !== '' ? $v['ogTitle'] : $t),
+        'twitterDescription' => $v['twitterDescription'] !== '' ? $v['twitterDescription'] : ($v['ogDescription'] !== '' ? $v['ogDescription'] : $d),
+        'twitterImage'       => $v['twitterImage'] !== '' ? $v['twitterImage'] : $v['ogImage'],
+      ];
+    } catch (\Throwable $e) {
+      return null;
+    }
+  }
+
+  protected function image_id_keys() {
+    return [
+      'ogImage'      => ['_seopress_social_fb_img_attachment_id', '_seopress_social_fb_img_width', '_seopress_social_fb_img_height'],
+      'twitterImage' => ['_seopress_social_twitter_img_attachment_id', '_seopress_social_twitter_img_width', '_seopress_social_twitter_img_height'],
+    ];
+  }
+}
+
 /** Detected but not written yet (phase 2: #314–#316). Present so the fallback head stands down. */
 class Visibility_SEO_Adapter_DetectOnly extends Visibility_SEO_Adapter {
   private $slug; private $name; private $version;
@@ -668,7 +802,7 @@ class Visibility_SEO {
     if (defined('WPSEO_VERSION')) return new Visibility_SEO_Adapter_Yoast();
     if (defined('RANK_MATH_VERSION')) return new Visibility_SEO_Adapter_RankMath();
     if (defined('AIOSEO_VERSION') || class_exists('AIOSEO\\Plugin\\AIOSEO')) return new Visibility_SEO_Adapter_AIOSEO();
-    if (defined('SEOPRESS_VERSION')) return new Visibility_SEO_Adapter_DetectOnly('seopress', 'SEOPress', SEOPRESS_VERSION);
+    if (defined('SEOPRESS_VERSION')) return new Visibility_SEO_Adapter_SEOPress();
     if (defined('THE_SEO_FRAMEWORK_VERSION') || function_exists('the_seo_framework')) return new Visibility_SEO_Adapter_DetectOnly('tsf', 'The SEO Framework', defined('THE_SEO_FRAMEWORK_VERSION') ? THE_SEO_FRAMEWORK_VERSION : null);
     if (defined('SLIM_SEO_VER')) return new Visibility_SEO_Adapter_DetectOnly('slimseo', 'Slim SEO', SLIM_SEO_VER);
     return new Visibility_SEO_Adapter_None();
