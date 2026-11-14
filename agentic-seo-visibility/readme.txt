@@ -131,6 +131,10 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **The live page shows the change at once.** After every change the plugin
   clears the cache of that one page (never the whole site) and the result
   says which cache was cleared.
+* **Content from Visibility has an author.** New posts and pages are
+  published under the admin who connected the site (or the first
+  administrator). Pick someone else under Agentic SEO › Connection. Editing
+  existing content never changes its author.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

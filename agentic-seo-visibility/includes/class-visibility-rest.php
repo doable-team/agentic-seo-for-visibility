@@ -381,7 +381,7 @@ class Visibility_REST {
     if (!in_array($type, ['post', 'page'], true) || !Visibility_Read::type_allowed($type)) {
       return new WP_Error('visibility_bad_type', __('Only posts and pages can be created.', 'agentic-seo-visibility'), ['status' => 400]);
     }
-    $args = $this->build_post_args($params, ['post_status' => 'draft', 'post_type' => $type]);
+    $args = $this->build_post_args($params, ['post_status' => 'draft', 'post_type' => $type, 'post_author' => Visibility_Author::id()]);
     $post_id = Visibility_Content::save($args);
     if (is_wp_error($post_id)) {
       return $post_id;

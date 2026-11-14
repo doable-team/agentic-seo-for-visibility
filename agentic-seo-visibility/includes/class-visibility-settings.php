@@ -22,6 +22,7 @@ class Visibility_Settings {
     add_action('admin_menu', [$this, 'register_menu']);
     add_action('admin_post_visibility_pair', [$this, 'handle_pair']);
     add_action('admin_post_visibility_disconnect', [$this, 'handle_disconnect']);
+    add_action('admin_post_visibility_author', [$this, 'handle_author']);
   }
 
   /** Build the nonce-protected query args for a redirect-after-action.
@@ -114,6 +115,47 @@ class Visibility_Settings {
     exit;
   }
 
+  /** Save the default author for content from Visibility (#275). */
+  public function handle_author() {
+    if (!current_user_can('manage_options')) {
+      wp_die(esc_html__('Permission denied.', 'agentic-seo-visibility'));
+    }
+    check_admin_referer('visibility_author');
+    $id = isset($_POST['visibility_default_author']) ? absint($_POST['visibility_default_author']) : 0;
+    $u = $id ? get_userdata($id) : null;
+    if (!$u || !user_can($u, 'publish_posts')) {
+      wp_safe_redirect(add_query_arg($this->get_notice_query_args('error', __('Pick a user who can publish posts.', 'agentic-seo-visibility')), admin_url('admin.php')));
+      exit;
+    }
+    update_option(Visibility_Author::OPTION, $id, false);
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args('author_saved'), admin_url('admin.php')));
+    exit;
+  }
+
+  /** The "Default author" box. */
+  private function render_author_box() {
+    $current = Visibility_Author::id();
+    ?>
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:20px 28px;margin-top:20px">
+      <h2 style="margin-top:0;font-size:15px"><?php echo esc_html__('Default author for content from Visibility', 'agentic-seo-visibility'); ?></h2>
+      <?php if (Visibility_Author::chosen_missing()) : ?>
+        <div class="notice notice-warning inline"><p><?php echo esc_html__('The user you chose no longer exists or can no longer publish. New content goes to the first administrator until you pick someone else.', 'agentic-seo-visibility'); ?></p></div>
+      <?php endif; ?>
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <?php wp_nonce_field('visibility_author'); ?>
+        <input type="hidden" name="action" value="visibility_author" />
+        <p class="description" style="margin-bottom:10px"><?php echo esc_html__('New posts and pages created by Visibility are published under this user. Editing existing content never changes its author.', 'agentic-seo-visibility'); ?></p>
+        <select name="visibility_default_author" id="visibility_default_author">
+          <?php foreach (Visibility_Author::candidates() as $u) : ?>
+            <option value="<?php echo (int) $u->ID; ?>" <?php selected((int) $u->ID, $current); ?>><?php echo esc_html($u->display_name . ' (' . $u->user_login . ')'); ?></option>
+          <?php endforeach; ?>
+        </select>
+        <button type="submit" class="button"><?php echo esc_html__('Save', 'agentic-seo-visibility'); ?></button>
+      </form>
+    </div>
+    <?php
+  }
+
   public function render() {
     if (!current_user_can('manage_options')) {
       return;
@@ -153,6 +195,8 @@ class Visibility_Settings {
         <div class="notice notice-success"><p><?php echo esc_html__('Connected to Visibility.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'disconnected') : ?>
         <div class="notice notice-info"><p><?php echo esc_html__('Disconnected. Generate a fresh pairing code in Visibility to reconnect.', 'agentic-seo-visibility'); ?></p></div>
+      <?php elseif ($status === 'author_saved') : ?>
+        <div class="notice notice-success"><p><?php echo esc_html__('Default author saved.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'error') : ?>
         <div class="notice notice-error"><p><?php echo esc_html($error_msg ?: __('Pairing failed.', 'agentic-seo-visibility')); ?></p></div>
       <?php endif; ?>
@@ -330,6 +374,7 @@ class Visibility_Settings {
           </form>
         <?php endif; ?>
       </div>
+      <?php if ($paired) $this->render_author_box(); ?>
     </div>
     <?php
   }

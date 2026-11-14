@@ -148,6 +148,7 @@ class Visibility_Executor {
       'post_status'   => 'draft',
       'post_title'    => isset($payload['title']) ? wp_kses_post((string) $payload['title']) : '',
       'post_content'  => isset($payload['content']) ? wp_kses_post((string) $payload['content']) : '',
+      'post_author'   => Visibility_Author::id(),
     ];
     if (!empty($payload['excerpt'])) {
       $args['post_excerpt'] = wp_kses_post((string) $payload['excerpt']);

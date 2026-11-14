@@ -67,6 +67,8 @@ class Visibility_Client {
     }
     update_option('visibility_paired_at', time(), false);
     update_option('visibility_last_seen_at', time(), false);
+    // The admin who connected the site is the default author (#275).
+    if (get_current_user_id()) update_option('visibility_paired_by', get_current_user_id(), false);
 
     return [
       'projectId'   => $body['projectId'],
