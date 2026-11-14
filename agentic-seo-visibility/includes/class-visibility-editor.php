@@ -257,6 +257,8 @@ class Visibility_Editor {
           $n = 0;
           $out = self::map_pieces($out, $pieces, function ($html) use ($v, &$n) { return self::set_tag_attr($html, 'img', 'alt', (string) $v, $n); });
           if (array_key_exists('alt', $attrs2)) { $attrs2['alt'] = sanitize_text_field((string) $v); $n++; }
+          // GenerateBlocks keeps element attributes in htmlAttributes.
+          if (isset($attrs2['htmlAttributes']) && is_array($attrs2['htmlAttributes']) && array_key_exists('alt', $attrs2['htmlAttributes'])) { $attrs2['htmlAttributes']['alt'] = sanitize_text_field((string) $v); $n++; }
           if ($n === 0) return new WP_Error('not_found', 'no image in this block');
         } elseif ($k === 'href' || $k === 'url') {
           $n = 0;
@@ -264,6 +266,7 @@ class Visibility_Editor {
           if ($url === '') return new WP_Error('invalid', 'not a valid URL');
           $out = self::map_pieces($out, $pieces, function ($html) use ($url, &$n) { return self::set_tag_attr($html, 'a', 'href', $url, $n, true); });
           foreach (['url', 'href', 'link'] as $ak) if (array_key_exists($ak, $attrs2) && is_string($attrs2[$ak])) { $attrs2[$ak] = $url; $n++; }
+          if (isset($attrs2['htmlAttributes']) && is_array($attrs2['htmlAttributes']) && array_key_exists('href', $attrs2['htmlAttributes'])) { $attrs2['htmlAttributes']['href'] = $url; $n++; }
           if ($n === 0) return new WP_Error('not_found', 'no link in this block');
         } elseif ($k === 'level') {
           $level = (int) $v;
