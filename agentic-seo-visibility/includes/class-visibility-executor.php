@@ -67,6 +67,8 @@ class Visibility_Executor {
       'internal_link.suggest'  => 'exec_internal_link_suggest',
       'page.create_draft'      => 'exec_page_create_draft',
       'page.update_content'    => 'exec_page_update_content',
+      'post.edit_parts'        => 'exec_post_edit_parts',
+      'page.edit_parts'        => 'exec_post_edit_parts',
       'page.publish'           => 'exec_page_publish',
       'media.upload_from_url'  => 'exec_media_upload_from_url',
       'media.update_meta'      => 'exec_media_update_meta',
@@ -140,9 +142,105 @@ class Visibility_Executor {
     if (array_key_exists('content', $fields)) $args['post_content'] = Visibility_Content::sanitize_update((string) $fields['content'], $post->post_content);
     if (array_key_exists('excerpt', $fields)) $args['post_excerpt'] = Visibility_Content::sanitize_update((string) $fields['excerpt'], $post->post_excerpt);
     if (array_key_exists('slug', $fields))    $args['post_name'] = sanitize_title((string) $fields['slug']);
+    $extra = self::page_attributes($fields);
+    if (is_wp_error($extra)) return self::fail('invalid', $extra->get_error_message());
+    $args += $extra;
+    $old_slug = $post->post_name;
+    $guard = self::slug_guard($post, $args);
+    if ($guard) return self::fail('unsupported', $guard);
+    $old_url = get_permalink($post);
     $result = Visibility_Content::save($args);
     if (is_wp_error($result)) return [false, null, $result->get_error_message()];
-    return [true, self::post_result($post_id), null];
+    if (array_key_exists('featuredMediaId', $fields)) self::set_featured($post_id, $fields['featuredMediaId']);
+    if (array_key_exists('template', $fields)) update_post_meta($post_id, '_wp_page_template', $fields['template'] === '' || $fields['template'] === null ? 'default' : sanitize_text_field((string) $fields['template']));
+    $out = self::post_result($post_id);
+    $out += self::slug_note($post, $old_slug, $old_url);
+    return [true, $out, null];
+  }
+
+  /** menuOrder / parent / template from an update payload (validated). */
+  private static function page_attributes($fields) {
+    $args = [];
+    if (array_key_exists('menuOrder', $fields)) $args['menu_order'] = (int) $fields['menuOrder'];
+    if (array_key_exists('parent', $fields)) {
+      $parent = $fields['parent'] === null ? 0 : (int) $fields['parent'];
+      if ($parent > 0 && !get_post($parent)) return new WP_Error('invalid', 'parent not found');
+      $args['post_parent'] = $parent;
+    }
+    if (array_key_exists('template', $fields) && $fields['template'] !== '' && $fields['template'] !== null) {
+      $tpl = sanitize_text_field((string) $fields['template']);
+      $available = array_keys(wp_get_theme()->get_page_templates(null, 'page'));
+      if (function_exists('wp_is_block_theme') && wp_is_block_theme() && function_exists('get_block_templates')) {
+        foreach (get_block_templates([], 'wp_template') as $t) $available[] = $t->slug;
+      }
+      if (!in_array($tpl, $available, true)) return new WP_Error('invalid', sprintf('template "%s" is not available in this theme', $tpl));
+    }
+    return $args;
+  }
+
+  private static function set_featured($post_id, $media_id) {
+    if ($media_id === null || (int) $media_id <= 0) delete_post_thumbnail($post_id);
+    else set_post_thumbnail($post_id, (int) $media_id);
+  }
+
+  /**
+   * A published post whose slug changed: WordPress keeps the old slug and
+   * 301-redirects it to the new address (wp_old_slug_redirect). Say so.
+   */
+  public static function slug_note($before, $old_slug, $old_url) {
+    $now = get_post($before->ID);
+    if (!$now || $old_slug === '' || $now->post_name === $old_slug || $before->post_status !== 'publish') return [];
+    if (!is_post_type_hierarchical($now->post_type)) {
+      $old = get_post_meta($before->ID, '_wp_old_slug');
+      return ['slugChanged' => ['from' => $old_slug, 'to' => $now->post_name, 'redirect' => in_array($old_slug, (array) $old, true) ? 'wordpress' : null]];
+    }
+    // Pages: WordPress keeps no old slug, so add a 301 in the redirect plugin.
+    $from = wp_parse_url($old_url, PHP_URL_PATH);
+    $to = wp_parse_url(get_permalink($now), PHP_URL_PATH);
+    $r = self::exec_redirect_create(['fromPath' => $from, 'toPath' => $to, 'type' => 301]);
+    return ['slugChanged' => ['from' => $old_slug, 'to' => $now->post_name, 'redirect' => $r[0] ? $r[1]['plugin'] : null, 'redirectError' => $r[0] ? null : $r[2]]];
+  }
+
+  /**
+   * A published hierarchical post (page) whose slug changes needs a redirect
+   * plugin for the old address; without one the change is refused.
+   * @return string|null why it is refused
+   */
+  public static function slug_guard($post, $args) {
+    if (!isset($args['post_name']) || $args['post_name'] === $post->post_name) return null;
+    if ($post->post_status !== 'publish' || !is_post_type_hierarchical($post->post_type)) return null;
+    $plugin = self::detect_redirect_plugin();
+    if ($plugin === 'redirection' || $plugin === 'rankmath') return null;
+    return 'Changing the address of a published page would break links to it, and there is no redirect plugin (Redirection or Rank Math) to send the old address to the new one. Install one, or keep the slug.';
+  }
+
+  /**
+   * Change only the targeted parts of a post (#285).
+   * Payload: {postId, modifiedGmt?, edits:[{target:{path}, op, text?, find?, html?, attrs?}]}.
+   */
+  private static function exec_post_edit_parts($payload) {
+    $post_id = intval($payload['postId'] ?? $payload['pageId'] ?? 0);
+    if (!$post_id) return self::fail('invalid', 'postId required');
+    $post = get_post($post_id);
+    if (!$post) return self::fail('not_found', 'post not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
+    }
+    $edits = isset($payload['edits']) && is_array($payload['edits']) ? array_values($payload['edits']) : [];
+    if (empty($edits)) return self::fail('invalid', 'edits required');
+    $builder = Visibility_Read::builder_of($post);
+    if ($builder) {
+      return self::fail('unsupported', sprintf('This page is built with %s, which Visibility cannot edit yet. Change its SEO, custom fields or image alt text instead.', $builder['name']));
+    }
+    $r = Visibility_Editor::apply($post->post_content, $edits);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    if ($r['content'] !== $post->post_content) {
+      $saved = Visibility_Content::save(['ID' => $post_id, 'post_content' => $r['content']]);
+      if (is_wp_error($saved)) return self::fail('save_failed', $saved->get_error_message());
+    }
+    $out = self::post_result($post_id);
+    $out['diff'] = $r['diff'];
+    return [true, $out, null];
   }
   private static function exec_page_update_content($payload) {
     return self::exec_post_update_content($payload);

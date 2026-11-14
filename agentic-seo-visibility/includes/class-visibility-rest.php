@@ -387,13 +387,19 @@ class Visibility_REST {
     }
     $args   = $this->build_post_args($params, ['ID' => $id], $existing);
     $args['ID'] = $id;
+    $guard = Visibility_Executor::slug_guard($existing, $args);
+    if ($guard) return new WP_Error('visibility_unsupported', $guard, ['status' => 409]);
+    $old_slug = $existing->post_name;
+    $old_url = get_permalink($existing);
     $updated = Visibility_Content::save($args);
     if (is_wp_error($updated)) {
       return $updated;
     }
     $this->apply_term_assignments($id, $params);
     $this->apply_featured_media($id, $params);
-    return rest_ensure_response($this->serialize_post_full($id));
+    $out = $this->serialize_post_full($id);
+    $out += Visibility_Executor::slug_note($existing, $old_slug, $old_url);
+    return rest_ensure_response($out);
   }
 
   public function delete_post(WP_REST_Request $request) {
@@ -612,6 +618,7 @@ class Visibility_REST {
       'template'     => (string) get_page_template_slug($post),
       'author'       => $author ? ['id' => (int) $author->ID, 'name' => $author->display_name] : null,
       'editor'       => Visibility_Read::editor_of($post),
+      'blockTemplate' => Visibility_Read::block_template_of($post),
       'categories'   => array_map(fn($c) => ['id' => (int) $c->term_id, 'name' => $c->name, 'slug' => $c->slug], $categories),
       'tags'         => array_map(fn($t) => ['id' => (int) $t->term_id, 'name' => $t->name, 'slug' => $t->slug], $tags),
       'featuredMedia' => $featuredId > 0 ? $this->serialize_media($featuredId) : null,

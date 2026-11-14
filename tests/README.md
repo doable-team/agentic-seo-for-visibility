@@ -5,11 +5,17 @@ in the plugin zip). Each site exposes the plugin with a fixed test token:
 
 | Site | URL | Token | Setup |
 |---|---|---|---|
-| 1 | http://localhost:8091 | `vis-test-token-1` | Twenty Twenty-Five, Gutenberg, no SEO plugin |
-| 2 | http://localhost:8092 | `vis-test-token-2` | Twenty Twenty-One + Classic Editor + Yoast SEO |
-| 3 | http://localhost:8093 | `vis-test-token-3` | Twenty Twenty-Five + Rank Math |
-| 4 | http://localhost:8094 | `vis-test-token-4` | Twenty Twenty-Five + All in One SEO |
-| 5 | http://localhost:8095 | `vis-test-token-5` | PHP 7.4 + WordPress 6.1, no SEO plugin |
+| 1 | http://localhost:8181 | `vis-test-token-1` | Twenty Twenty-Five, Gutenberg, no SEO plugin |
+| 2 | http://localhost:8182 | `vis-test-token-2` | Twenty Twenty-One + Classic Editor + Yoast SEO |
+| 3 | http://localhost:8183 | `vis-test-token-3` | Twenty Twenty-Five + Rank Math |
+| 4 | http://localhost:8184 | `vis-test-token-4` | Twenty Twenty-Five + All in One SEO |
+| 5 | http://localhost:8185 | `vis-test-token-5` | PHP 7.4 + WordPress 6.0, no SEO plugin |
+| 6 | http://localhost:8186 | `vis-test-token-6` | Astra + Elementor + Rank Math (T3) |
+| 7 | http://localhost:8187 | `vis-test-token-7` | ACF + The SEO Framework (T6) |
+
+Sites are created with `/home/tulasinath/viswp/site.sh <n> <php> [wp-version]`
+(MariaDB container `viswp-db`, WP admin `admin`/`admin`); `sync.sh` copies the
+working plugin into every running site.
 
 Most single-site checks take `SITE=N` (default 1); `t3-schema.sh` and
 `t-seo-adapters.sh` take `SITES="1 2"`.
@@ -33,4 +39,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t-seopress-standdown.sh` — on a SEOPress site our head prints nothing and writes are refused plainly (#282 in #287).
 - `fixtures/og-1200x630.png` — test image (Rank Math only prints images of at least 200x200 from the media library).
 - `t-media.sh` — POST /media: alt, title, caption, readable file name, attached to the post, one upload per source URL, GET /media?id= (#310 plugin part).
-- `t2-classic.sh` — Classic Editor edit keeps shortcodes, wpautop paragraphs and embeds (T2).
+- `t2-classic.sh` — Classic Editor edit keeps shortcodes, wpautop paragraphs and embeds; `post.edit_parts` on classic paths (T2, #285).
+- `t1-block-edit.sh` — `post.edit_parts` changes only the target block (text, heading level, alt, href, insert/remove), block template reported, slug-change rules (T1, T11, #285).

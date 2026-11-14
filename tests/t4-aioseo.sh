@@ -8,7 +8,7 @@ TAG=$RANDOM
 R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"AIOSEO Title $TAG\",\"metaDescription\":\"AIOSEO description $TAG\",\"canonical\":\"https://example.com/canon-$TAG/\",\"ogTitle\":\"OG $TAG\",\"robotsNoindex\":true}}")
 check "$(echo "$R" | jget "['ok']")" "True" "seo_meta.update ok ($R)"
 check "$(echo "$R" | jget "['result']['seoPlugin']")" "aioseo" "routed to aioseo"
-HEAD=$(curl -sL "http://localhost:8094/?page_id=$ID" | sed -n '/<head/,/<\/head>/p')
+HEAD=$(curl -sL "http://localhost:8184/?page_id=$ID" | sed -n '/<head/,/<\/head>/p')
 grep -q <<<"$HEAD" "<title>AIOSEO Title $TAG</title>" && ok "title in <head>" || bad "title missing"
 check "$(grep -c <<<"$HEAD" "name=\"description\" content=\"AIOSEO description $TAG\"")" "1" "meta description once"
 check "$(grep -c <<<"$HEAD" "rel=\"canonical\" href=\"https://example.com/canon-$TAG/\"")" "1" "canonical once"

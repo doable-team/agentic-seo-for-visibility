@@ -21,5 +21,5 @@ check "$(echo "$C1" | jget "['theme']['blockTheme']")" "True" "site 1: block the
 check "$(echo "$C1" | jget "['editor']")" "block" "site 1: block editor"
 check "$(api 3 GET /capabilities | jget "['seo']['plugin']")" "rankmath" "site 3: rankmath"
 check "$(api 4 GET /capabilities | jget "['seo']['plugin']")" "aioseo" "site 4: aioseo"
-check "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8092/wp-json/visibility/v1/capabilities)" "401" "needs the site token"
+check "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8182/wp-json/visibility/v1/capabilities)" "401" "needs the site token"
 summary

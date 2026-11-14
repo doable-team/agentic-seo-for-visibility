@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared helpers for the end-to-end checks against the Docker test sites.
-# Site N: http://localhost:809N, token vis-test-token-N (see tests/README.md).
+# Site N: http://localhost:818N, token vis-test-token-N (see tests/README.md).
 WP=/home/tulasinath/viswp/wp.sh
 pass=0; fail=0
 ok()   { echo "PASS  $*"; pass=$((pass+1)); }
@@ -9,9 +9,9 @@ check(){ if [ "$1" = "$2" ]; then ok "$3"; else bad "$3 (expected [$2], got [$1]
 api()  { # api <site> <METHOD> <path> [json]
   local n=$1 m=$2 p=$3 d=$4
   if [ -n "$d" ]; then
-    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" -H 'Content-Type: application/json' --data "$d" "http://localhost:809$n/wp-json/visibility/v1$p"
+    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" -H 'Content-Type: application/json' --data "$d" "http://localhost:818$n/wp-json/visibility/v1$p"
   else
-    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" "http://localhost:809$n/wp-json/visibility/v1$p"
+    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" "http://localhost:818$n/wp-json/visibility/v1$p"
   fi
 }
 action() { # action <site> <actionType> <payload-json> [requestId]

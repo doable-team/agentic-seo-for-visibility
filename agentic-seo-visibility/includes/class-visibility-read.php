@@ -77,8 +77,43 @@ class Visibility_Read {
    * is the index into parse_blocks() at each level.
    */
   public static function blocks($content) {
-    if (!has_blocks($content)) return [];
+    // Classic content: headings, paragraphs, list items, links and images
+    // with the paths post.edit_parts takes ("p.3", "img.0").
+    if (!has_blocks($content)) return Visibility_Editor::classic_read($content);
     return self::block_nodes(parse_blocks($content), '');
+  }
+
+  /**
+   * Block themes: the template that renders this post and the template parts
+   * it pulls in (header, footer…). Their text is not in post_content, and is
+   * read-only for Visibility. Null on classic themes.
+   */
+  public static function block_template_of($post) {
+    if (!function_exists('wp_is_block_theme') || !wp_is_block_theme() || !function_exists('get_block_template')) return null;
+    $type = $post->post_type;
+    $custom = (string) get_page_template_slug($post);
+    $candidates = [];
+    if ($custom !== '') $candidates[] = $custom;
+    if ($type === 'page') {
+      $candidates = array_merge($candidates, ['page-' . $post->post_name, 'page-' . $post->ID, 'page']);
+    } else {
+      $candidates = array_merge($candidates, ['single-' . $type . '-' . $post->post_name, 'single-' . $type, 'single']);
+    }
+    if ((int) get_option('page_on_front') === (int) $post->ID) array_unshift($candidates, 'front-page');
+    $candidates = array_merge($candidates, ['singular', 'index']);
+    foreach ($candidates as $slug) {
+      $t = get_block_template(get_stylesheet() . '//' . $slug, 'wp_template');
+      if (!$t) continue;
+      $parts = [];
+      if (preg_match_all('/<!--\s+wp:template-part\s+(\{.*?\})\s+\/?-->/s', (string) $t->content, $m)) {
+        foreach ($m[1] as $json) {
+          $a = json_decode($json, true);
+          if (!empty($a['slug'])) $parts[] = ['slug' => $a['slug'], 'area' => isset($a['tagName']) ? $a['tagName'] : null];
+        }
+      }
+      return ['slug' => $slug, 'title' => $t->title, 'source' => $t->source, 'parts' => $parts, 'writable' => false];
+    }
+    return null;
   }
 
   private static function block_nodes($blocks, $prefix) {
@@ -91,6 +126,7 @@ class Visibility_Read {
         'blockName'   => $b['blockName'],
         'attrs'       => empty($b['attrs']) ? new stdClass() : $b['attrs'],
         'text'        => trim(preg_replace('/\s+/', ' ', wp_strip_all_tags((string) $b['innerHTML']))),
+        'syncedPattern' => $b['blockName'] === 'core/block' && !empty($b['attrs']['ref']) ? (int) $b['attrs']['ref'] : null,
         'innerBlocks' => self::block_nodes($b['innerBlocks'], $path),
       ];
     }
@@ -268,7 +304,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ],
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts'],
     ];
   }
 }

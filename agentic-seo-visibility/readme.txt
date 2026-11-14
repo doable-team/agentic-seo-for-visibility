@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.10.0
+Stable tag: 0.11.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,6 +113,16 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.11.0 =
+* **Change one part of a page.** Agents can now change a single heading,
+  paragraph, image alt text or link on Gutenberg and classic pages (and
+  insert, replace or remove a block) without touching the rest: every other
+  byte of the page stays as it was, shortcodes stay as text, and the result
+  shows the part before and after. On block themes the page also says which
+  template renders it, so agents know the header and footer are not in the
+  page. A published page's address is only changed when a redirect plugin
+  can send the old address to the new one.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
