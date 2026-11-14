@@ -49,4 +49,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t-fields-meta.sh` — `/fields/schema`, registered meta read and written only when allowlisted and edit_fields is on, denied/unknown keys and bad values refused, rollback (#288).
 - `t-builder-shared.sh` — a builder page reports `builder:<slug>`/writable; without a writing adapter edit_parts is refused as unsupported and post_content untouched (#286).
 - `t-block-plugins.sh` — edits inside Spectra / Kadence Blocks / GenerateBlocks blocks: only the target text/alt changes, block attributes kept, the rendered page identical apart from the edit, rollback (#317–#319).
+- `t3-elementor.sh` — Elementor widget edits by elementId (heading text/level, image alt, button link): front end, CSS regenerated, page opens in the Elementor editor, other widgets untouched, rollback, Rank Math schema once (T3, #320). Site 6.
 - `t1-block-edit.sh` — `post.edit_parts` changes only the target block (text, heading level, alt, href, insert/remove), block template reported, slug-change rules (T1, T11, #285).
