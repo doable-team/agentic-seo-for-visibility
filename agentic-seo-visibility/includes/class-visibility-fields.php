@@ -47,6 +47,12 @@ class Visibility_Fields {
         'theme-transparent-header-meta' => ['Transparent header', 'select', ['default', 'enabled', 'disabled']],
         'stick-header-meta'           => ['Sticky header', 'select', ['default', 'enabled', 'disabled']],
       ],
+      'generatepress' => [
+        '_generate-sidebar-layout-meta' => ['Sidebar layout', 'select', ['', 'right-sidebar', 'left-sidebar', 'no-sidebar', 'both-sidebars', 'both-left', 'both-right']],
+        '_generate-footer-widget-meta'  => ['Footer widgets', 'select', ['', '0', '1', '2', '3', '4', '5']],
+        '_generate-full-width-content'  => ['Content container', 'select', ['', 'true', 'contained']],
+        '_generate-disable-headline'    => ['Hide title', 'select', ['', 'true']],
+      ],
     ];
   }
 
