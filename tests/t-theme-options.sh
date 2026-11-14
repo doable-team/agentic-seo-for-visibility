@@ -13,7 +13,7 @@ KEY[astra]=site-post-title;                VAL[astra]=disabled;   SEE[astra]='<h
 KEY[generatepress]=_generate-disable-headline; VAL[generatepress]=true; SEE[generatepress]='<h1 class="entry-title"'
 KEY[kadence]=_kad_post_title;              VAL[kadence]=hide;     SEE[kadence]='<h1 class="entry-title"'
 KEY[oceanwp]=ocean_post_layout;            VAL[oceanwp]=left-sidebar; SEE[oceanwp]='content-left-sidebar|left-sidebar'
-for T in ${THEMES:-astra generatepress kadence}; do
+for T in ${THEMES:-astra generatepress kadence oceanwp}; do
   $WP $S theme activate $T >/dev/null 2>&1
   L="$T: "; K="theme:$T:${KEY[$T]}"
   P=$($WP $S post create --post_type=page --post_status=publish --post_title="Theme opt $T $RANDOM" --post_content='<p>Body</p>' --porcelain | tr -d '\r' | tail -1)

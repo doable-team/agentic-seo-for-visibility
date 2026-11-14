@@ -63,6 +63,16 @@ class Visibility_Fields {
         '_kad_post_header'          => ['Disable header', 'boolean', null],
         '_kad_post_footer'          => ['Disable footer', 'boolean', null],
       ],
+      'oceanwp' => [
+        'ocean_post_layout'          => ['Content layout', 'select', ['', 'right-sidebar', 'left-sidebar', 'full-width', 'full-screen', 'both-sidebars']],
+        'ocean_both_sidebars_style'  => ['Both sidebars style', 'select', ['', 'ssc-style', 'scs-style', 'css-style']],
+        'ocean_display_top_bar'      => ['Top bar', 'select', ['default', 'on', 'off']],
+        'ocean_display_header'       => ['Header', 'select', ['default', 'on', 'off']],
+        'ocean_disable_title'        => ['Page title', 'select', ['default', 'enable', 'on']],
+        'ocean_disable_breadcrumbs'  => ['Breadcrumbs', 'select', ['default', 'on', 'off']],
+        'ocean_display_footer_widgets' => ['Footer widgets', 'select', ['default', 'on', 'off']],
+        'ocean_display_footer_bottom'  => ['Footer bottom', 'select', ['default', 'on', 'off']],
+      ],
     ];
   }
 
