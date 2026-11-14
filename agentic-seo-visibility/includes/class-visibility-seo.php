@@ -782,7 +782,137 @@ class Visibility_SEO_Adapter_SEOPress extends Visibility_SEO_Adapter_MetaMap {
   }
 }
 
-/** Detected but not written yet (phase 2: #314–#316). Present so the fallback head stands down. */
+/**
+ * The SEO Framework. Post fields are separate post meta, term fields one
+ * array (autodescription-term-settings); both are written through TSF's own
+ * Data API so its sanitising, caches and sitemap refresh run.
+ * noindex/nofollow are "qubits": 1 = on, -1 = forced off, 0 = site default.
+ */
+class Visibility_SEO_Adapter_TSF extends Visibility_SEO_Adapter {
+  const KEYS = [
+    'metaTitle'          => '_genesis_title',
+    'metaDescription'    => '_genesis_description',
+    'canonical'          => '_genesis_canonical_uri',
+    'ogTitle'            => '_open_graph_title',
+    'ogDescription'      => '_open_graph_description',
+    'ogImage'            => '_social_image_url',
+    'twitterTitle'       => '_twitter_title',
+    'twitterDescription' => '_twitter_description',
+    'robotsNoindex'      => '_genesis_noindex',
+    'robotsNofollow'     => '_genesis_nofollow',
+  ];
+  const TERM_KEYS = [
+    'metaTitle'          => 'doctitle',
+    'metaDescription'    => 'description',
+    'canonical'          => 'canonical',
+    'ogTitle'            => 'og_title',
+    'ogDescription'      => 'og_description',
+    'ogImage'            => 'social_image_url',
+    'twitterTitle'       => 'tw_title',
+    'twitterDescription' => 'tw_description',
+    'robotsNoindex'      => 'noindex',
+    'robotsNofollow'     => 'nofollow',
+  ];
+  const POST_CLASS = 'The_SEO_Framework\\Data\\Plugin\\Post';
+  const TERM_CLASS = 'The_SEO_Framework\\Data\\Plugin\\Term';
+
+  public function slug() { return 'tsf'; }
+  public function name() { return 'The SEO Framework'; }
+  public function version() { return defined('THE_SEO_FRAMEWORK_VERSION') ? THE_SEO_FRAMEWORK_VERSION : null; }
+  public function fields() { return array_merge(array_keys(self::KEYS), ['schemaJsonLd']); }
+  public function term_fields() { return array_keys(self::TERM_KEYS); }
+
+  private static function from($row, $map) {
+    $out = self::blank();
+    foreach ($map as $f => $k) {
+      $v = isset($row[$k]) ? $row[$k] : '';
+      if (in_array($f, self::BOOL_FIELDS, true)) $out[$f] = (int) $v === 1;
+      else $out[$f] = is_scalar($v) ? (string) $v : '';
+    }
+    return $out;
+  }
+
+  private static function to($f, $v) {
+    if (in_array($f, self::BOOL_FIELDS, true)) return $v ? 1 : 0;
+    if (in_array($f, ['canonical', 'ogImage'], true)) return self::url($v);
+    return self::text($v);
+  }
+
+  public function read($post_id) {
+    $c = self::POST_CLASS;
+    if (class_exists($c)) {
+      $c::get_meta($post_id); // warms TSF's cache; values below come from post meta
+    }
+    $row = [];
+    foreach (self::KEYS as $f => $k) $row[$k] = get_post_meta($post_id, $k, true);
+    return self::from($row, self::KEYS);
+  }
+
+  public function read_term($term_id, $taxonomy) {
+    $row = get_term_meta($term_id, 'autodescription-term-settings', true);
+    return self::from(is_array($row) ? $row : [], self::TERM_KEYS);
+  }
+
+  public function write($post_id, array $fields) {
+    list($take, $rest) = $this->partition($fields, array_keys(self::KEYS));
+    $c = self::POST_CLASS;
+    if (class_exists($c)) {
+      $meta = $c::get_meta($post_id);
+      foreach ($take as $f => $v) {
+        $meta[self::KEYS[$f]] = self::to($f, $v);
+        if ($f === 'ogImage') $meta['_social_image_id'] = 0;
+        // The title Visibility writes is the whole title, as on the other
+        // SEO plugins: don't let TSF append the site name to it.
+        if ($f === 'metaTitle') $meta['_tsf_title_no_blogname'] = self::text($v) !== '' ? 1 : 0;
+      }
+      $c::save_meta($post_id, $meta);
+    } else {
+      foreach ($take as $f => $v) self::set_meta($post_id, self::KEYS[$f], self::to($f, $v));
+    }
+    clean_post_cache($post_id);
+    return ['written' => array_keys($take), 'unsupported' => $rest];
+  }
+
+  public function write_term($term_id, $taxonomy, array $fields) {
+    list($take, $rest) = $this->partition($fields, array_keys(self::TERM_KEYS));
+    $c = self::TERM_CLASS;
+    $meta = class_exists($c) ? $c::get_meta($term_id) : (array) get_term_meta($term_id, 'autodescription-term-settings', true);
+    foreach ($take as $f => $v) {
+      $meta[self::TERM_KEYS[$f]] = self::to($f, $v);
+      if ($f === 'ogImage') $meta['social_image_id'] = 0;
+      if ($f === 'metaTitle') $meta['title_no_blog_name'] = self::text($v) !== '' ? 1 : 0;
+    }
+    if (class_exists($c)) $c::save_meta($term_id, $meta);
+    else update_term_meta($term_id, 'autodescription-term-settings', $meta);
+    clean_term_cache($term_id, $taxonomy);
+    return ['written' => array_keys($take), 'unsupported' => $rest];
+  }
+
+  public function rendered($post_id) {
+    if (!class_exists('The_SEO_Framework\\Meta\\Title')) return null;
+    try {
+      $args = ['id' => (int) $post_id];
+      $v = $this->read($post_id);
+      $robots = [$v['robotsNoindex'] ? 'noindex' : 'index', $v['robotsNofollow'] ? 'nofollow' : 'follow'];
+      return [
+        'title'              => (string) \The_SEO_Framework\Meta\Title::get_title($args),
+        'description'        => (string) \The_SEO_Framework\Meta\Description::get_description($args),
+        'canonical'          => (string) \The_SEO_Framework\Meta\URI::get_canonical_url($args),
+        'robots'             => implode(', ', $robots),
+        'ogTitle'            => (string) \The_SEO_Framework\Meta\Open_Graph::get_title($args),
+        'ogDescription'      => (string) \The_SEO_Framework\Meta\Open_Graph::get_description($args),
+        'ogImage'            => $v['ogImage'],
+        'twitterTitle'       => (string) \The_SEO_Framework\Meta\Twitter::get_title($args),
+        'twitterDescription' => (string) \The_SEO_Framework\Meta\Twitter::get_description($args),
+        'twitterImage'       => $v['ogImage'],
+      ];
+    } catch (\Throwable $e) {
+      return null;
+    }
+  }
+}
+
+/** Detected but not written yet. Present so the fallback head stands down. */
 class Visibility_SEO_Adapter_DetectOnly extends Visibility_SEO_Adapter {
   private $slug; private $name; private $version;
   public function __construct($slug, $name, $version) { $this->slug = $slug; $this->name = $name; $this->version = $version; }
@@ -803,7 +933,7 @@ class Visibility_SEO {
     if (defined('RANK_MATH_VERSION')) return new Visibility_SEO_Adapter_RankMath();
     if (defined('AIOSEO_VERSION') || class_exists('AIOSEO\\Plugin\\AIOSEO')) return new Visibility_SEO_Adapter_AIOSEO();
     if (defined('SEOPRESS_VERSION')) return new Visibility_SEO_Adapter_SEOPress();
-    if (defined('THE_SEO_FRAMEWORK_VERSION') || function_exists('the_seo_framework')) return new Visibility_SEO_Adapter_DetectOnly('tsf', 'The SEO Framework', defined('THE_SEO_FRAMEWORK_VERSION') ? THE_SEO_FRAMEWORK_VERSION : null);
+    if (defined('THE_SEO_FRAMEWORK_VERSION') || function_exists('the_seo_framework')) return new Visibility_SEO_Adapter_TSF();
     if (defined('SLIM_SEO_VER')) return new Visibility_SEO_Adapter_DetectOnly('slimseo', 'Slim SEO', SLIM_SEO_VER);
     return new Visibility_SEO_Adapter_None();
   }

@@ -148,6 +148,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **SEOPress:** title, description, focus keyword, canonical, noindex,
   nofollow, primary category, Facebook and Twitter fields, and category/tag
   SEO are written into SEOPress. Structured data joins SEOPress's own graph.
+* **The SEO Framework:** title, description, canonical, noindex, nofollow,
+  Open Graph and Twitter fields, and category/tag SEO are written through The
+  SEO Framework's own settings. Structured data joins its schema graph.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

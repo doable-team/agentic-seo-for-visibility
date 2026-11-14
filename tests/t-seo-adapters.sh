@@ -19,7 +19,8 @@ for S in $SITES; do
   F="{\"metaTitle\":\"Title $T\",\"metaDescription\":\"Description $T\",\"canonical\":\"https://example.com/c-$T/\",\"ogTitle\":\"OG title $T\",\"ogDescription\":\"OG description $T\",\"ogImage\":\"$IMG\",\"twitterTitle\":\"TW title $T\",\"twitterDescription\":\"TW description $T\",\"focusKeyword\":\"keyword $T\",\"notAField\":\"x\"}"
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":$F}")
   check "$(echo "$R" | jget "['ok']")" "True" "${L}seo_meta.update ok"
-  check "$(echo "$R" | jget "['result']['unsupportedFields']")" "['notAField']" "${L}unknown field reported in unsupportedFields"
+  UNSUP="['notAField']"; [ "$NAME" = "tsf" ] && UNSUP="['focusKeyword', 'notAField']"   # TSF has no focus keyword
+  check "$(echo "$R" | jget "['result']['unsupportedFields']")" "$UNSUP" "${L}unknown field reported in unsupportedFields"
   check "$(echo "$R" | jget "['result']['before']['metaTitle']")" "" "${L}before.metaTitle empty"
   check "$(echo "$R" | jget "['result']['after']['metaTitle']")" "Title $T" "${L}after.metaTitle"
   check "$(echo "$R" | jget "['result']['rendered']['description']")" "Description $T" "${L}rendered.description"
@@ -32,7 +33,7 @@ for S in $SITES; do
   python3 head-check.py '{"robots_contains":["noindex"]}' "$L" <<<"$(curl -sL "http://localhost:818$S/?page_id=$ID")" && pass=$((pass+1)) || fail=$((fail+1))
   # Read back through the rich read.
   RR=$(api $S GET "/posts/$ID?include=seo")
-  check "$(echo "$RR" | jget "['seo']['values']['focusKeyword']")" "keyword $T" "${L}read: focusKeyword"
+  [ "$NAME" = "tsf" ] || check "$(echo "$RR" | jget "['seo']['values']['focusKeyword']")" "keyword $T" "${L}read: focusKeyword"
   check "$(echo "$RR" | jget "['seo']['values']['robotsNoindex']")" "True" "${L}read: robotsNoindex"
   # Clear title + noindex again.
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"\",\"robotsNoindex\":false}}")
