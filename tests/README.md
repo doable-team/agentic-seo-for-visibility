@@ -57,4 +57,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t-theme-options.sh` — theme page options listed per theme, refused until allowlisted, value checked against the theme's choices, front end changes, rollback (#324–#327). Site 11, `THEMES="…"`.
 - `t9-cache.sh` — with a real cache plugin caching pages (browser Accept header), a change shows on the live page at once, another cached page stays cached, `cachePurged` names the cache (T9, #328–#333). `SITE=N CACHE="WP Super Cache"`. Sites are created per cache plugin and removed after the row.
 - `t9-litespeed.sh` — LiteSpeed Cache: the X-LiteSpeed-Purge header tags only the changed post, never `*` (#330).
+- `t9-cloudflare.sh` + `cf-mock.py` — Cloudflare plugin connected (token, zone, APO) against a mocked Cloudflare API: only the changed page's URLs are purged in the site's zone, never everything; a Cloudflare error is not reported as purged; not connected = not listed (#333).
 - `t1-block-edit.sh` — `post.edit_parts` changes only the target block (text, heading level, alt, href, insert/remove), block template reported, slug-change rules (T1, T11, #285).

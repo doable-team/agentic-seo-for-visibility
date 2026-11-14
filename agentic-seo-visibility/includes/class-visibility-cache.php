@@ -77,11 +77,59 @@ class Visibility_Cache {
         },
       ],
       // Cloudflare (official plugin, incl. APO): purge the post's URLs through
+      // the plugin's own API client, only when the plugin is connected.
+      'cloudflare' => [
+        'Cloudflare',
+        function () { return Visibility_Cache::cloudflare_ready(); },
+        function ($id, $url) { return Visibility_Cache::cloudflare_purge($id); },
+      ],
     ];
     /**
      * Add a purger: $purgers['slug'] = [name, detect callable, purge callable($post_id, $url)].
      */
     return apply_filters('visibility_cache_purgers', $p);
+  }
+
+  // ─── Cloudflare ────────────────────────────────────────────────────────
+
+  /**
+   * The official Cloudflare plugin is active and connected (API key or token
+   * and the site's zone name saved in it). Without that it purges nothing.
+   */
+  public static function cloudflare_ready() {
+    if (!defined('CLOUDFLARE_PLUGIN_DIR') || !class_exists('\\Cloudflare\\APO\\WordPress\\Hooks')) return false;
+    $key = defined('CLOUDFLARE_API_KEY') && CLOUDFLARE_API_KEY !== '' ? CLOUDFLARE_API_KEY : get_option('cloudflare_api_key');
+    $zone = defined('CLOUDFLARE_DOMAIN_NAME') && CLOUDFLARE_DOMAIN_NAME !== '' ? CLOUDFLARE_DOMAIN_NAME : get_option('cloudflare_cached_domain_name');
+    return !empty($key) && !empty($zone);
+  }
+
+  /**
+   * Purge the post's URLs (the page plus what the plugin ties to it: home,
+   * archives, feeds) through the plugin's own API client, so its zone lookup,
+   * credentials (key or token) and APO handling apply. True only when
+   * Cloudflare answered success.
+   */
+  public static function cloudflare_purge($post_id) {
+    $ok = null;
+    // The plugin reports each purge call through its logger only; watch the
+    // HTTP answer of the purge request instead.
+    // http_api_debug fires for every finished request, including answers
+    // short-circuited by pre_http_request.
+    $watch = function ($response, $context, $class, $args, $url) use (&$ok) {
+      if ($context !== 'response' || strpos((string) $url, '/purge_cache') === false) return;
+      $body = is_array($response) ? json_decode((string) wp_remote_retrieve_body($response), true) : null;
+      $good = is_array($body) && !empty($body['success']);
+      $ok = ($ok === null ? true : $ok) && $good;
+    };
+    add_action('http_api_debug', $watch, 10, 5);
+    try {
+      $hooks = new \Cloudflare\APO\WordPress\Hooks();
+      $hooks->purgeCacheByRelevantURLs([(int) $post_id]);
+    } catch (\Throwable $e) {
+      $ok = false;
+    }
+    remove_action('http_api_debug', $watch, 10);
+    return $ok === true;
   }
 
   /** Slugs of the caches the plugin can purge on this site right now. */

@@ -175,6 +175,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **WP Super Cache, W3 Total Cache, LiteSpeed Cache, WP Fastest Cache and
   SiteGround Speed Optimizer:** the changed page's cache is cleared after
   every change.
+* **Cloudflare:** when the Cloudflare plugin is connected (including APO),
+  the changed page is purged from Cloudflare too, through the plugin's own
+  connection.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
