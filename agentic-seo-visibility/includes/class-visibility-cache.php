@@ -25,6 +25,17 @@ class Visibility_Cache {
         function () { return function_exists('rocket_clean_post'); },
         function ($id, $url) { rocket_clean_post($id); return true; },
       ],
+      // WP Super Cache: the post's own page (and what WPSC ties to it).
+      'wp-super-cache' => [
+        'WP Super Cache',
+        function () { return function_exists('wp_cache_post_change'); },
+        function ($id, $url) {
+          wp_cache_post_change($id);
+          if ($url !== '' && function_exists('wpsc_delete_url_cache')) wpsc_delete_url_cache($url);
+          return true;
+        },
+      ],
+      // Cloudflare (official plugin, incl. APO): purge the post's URLs through
     ];
     /**
      * Add a purger: $purgers['slug'] = [name, detect callable, purge callable($post_id, $url)].
