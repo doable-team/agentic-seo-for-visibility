@@ -32,6 +32,7 @@ function visibility_api_base_url() {
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-client.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-content.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-editor.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-changes.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-policy.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-links.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-settings.php';
@@ -48,6 +49,7 @@ add_action('plugins_loaded', function () {
   new Visibility_Settings();
   new Visibility_REST();
   Visibility_Requests::init();
+  Visibility_Changes::init();
   // Emits SEO tags itself while no SEO plugin is installed; silent once one is.
   Visibility_SEO_Head::init();
   // Merges stored JSON-LD into the active SEO plugin's own schema graph.
@@ -65,6 +67,7 @@ register_activation_hook(__FILE__, function () {
     wp_schedule_event(time() + 60, 'daily', 'visibility_daily_heartbeat');
   }
   Visibility_Requests::activate_cron();
+  Visibility_Changes::install();
 });
 register_deactivation_hook(__FILE__, function () {
   // Every occurrence, not just the next one.

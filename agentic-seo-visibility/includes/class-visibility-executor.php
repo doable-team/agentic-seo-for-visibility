@@ -46,11 +46,46 @@ class Visibility_Executor {
     if ($refused) {
       return self::fail($refused[0], $refused[1]);
     }
+    $target = self::target_post($action_type, $payload);
+    if ($target) Visibility_Changes::begin($target);
     try {
-      return self::{$method}($payload);
+      $res = self::{$method}($payload);
     } catch (\Throwable $e) {
+      if ($target) Visibility_Changes::abort($target);
       return [false, null, $e->getMessage()];
     }
+    return self::after_write($action_type, $target, $res);
+  }
+
+  /** Actions that create a post (snapshot after, rollback = trash). */
+  const CREATE_ACTIONS = ['post.create_draft', 'page.create_draft'];
+  /** Actions that cannot be undone from a snapshot. */
+  const NO_SNAPSHOT = ['post.delete_permanent', 'media.delete', 'media.upload_from_url', 'change.rollback', 'redirect.create', 'redirect.delete', 'category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete'];
+
+  /** The post (or attachment) an action writes to, for the snapshot. */
+  private static function target_post($action_type, $payload) {
+    if (in_array($action_type, self::CREATE_ACTIONS, true) || in_array($action_type, self::NO_SNAPSHOT, true)) return 0;
+    if ($action_type === 'seo_meta.update' && !empty($payload['termId'])) return 0;
+    if (strpos($action_type, 'media.') === 0) return (int) ($payload['mediaId'] ?? 0);
+    return (int) ($payload['postId'] ?? $payload['pageId'] ?? 0);
+  }
+
+  /** Record the change (changeId) and run the after-write hooks on success. */
+  private static function after_write($action_type, $target, $res) {
+    list($ok, $result) = $res;
+    $post_id = $target;
+    if (in_array($action_type, self::CREATE_ACTIONS, true) && $ok && is_array($result)) $post_id = (int) ($result['postId'] ?? 0);
+    if (!$ok) {
+      if ($target) Visibility_Changes::abort($target);
+      return $res;
+    }
+    if ($post_id && is_array($result)) {
+      $change = Visibility_Changes::commit($post_id, $action_type, 'action', in_array($action_type, self::CREATE_ACTIONS, true));
+      $result['changeId'] = $change;
+      if (isset($result['modifiedGmt'])) $result['modifiedGmt'] = Visibility_Content::modified_gmt($post_id);
+      $res[1] = $result;
+    }
+    return $res;
   }
 
   private static function method_for($action_type) {
@@ -82,6 +117,7 @@ class Visibility_Executor {
       'seo_meta.update'        => 'exec_seo_meta_update',
       'redirect.create'        => 'exec_redirect_create',
       'redirect.delete'        => 'exec_redirect_delete',
+      'change.rollback'        => 'exec_change_rollback',
     ];
     return isset($map[$action_type]) ? $map[$action_type] : null;
   }
@@ -669,6 +705,21 @@ class Visibility_Executor {
       return [true, ['redirectId' => $id, 'deleted' => true], null];
     }
     return [false, null, 'Delete not implemented for ' . $plugin];
+  }
+
+  // ─── Rollback ──────────────────────────────────────────────────────────
+
+  private static function exec_change_rollback($payload) {
+    $id = (int) ($payload['changeId'] ?? 0);
+    if (!$id) return self::fail('invalid', 'changeId required');
+    $r = Visibility_Changes::rollback($id, 'action');
+    if (is_wp_error($r)) {
+      $code = $r->get_error_code();
+      self::$last_error_code = $code;
+      $data = $r->get_error_data();
+      return [false, is_array($data) ? $data : null, $r->get_error_message()];
+    }
+    return [true, $r + ['ok' => true], null];
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────

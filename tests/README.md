@@ -40,4 +40,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `fixtures/og-1200x630.png` — test image (Rank Math only prints images of at least 200x200 from the media library).
 - `t-media.sh` — POST /media: alt, title, caption, readable file name, attached to the post, one upload per source URL, GET /media?id= (#310 plugin part).
 - `t2-classic.sh` — Classic Editor edit keeps shortcodes, wpautop paragraphs and embeds; `post.edit_parts` on classic paths (T2, #285).
+- `t14-rollback.sh` — every write returns `changeId`; rollback restores content and SEO (front end too), a created draft is trashed, rollback after a manual edit is a 409 conflict (T14, #291). `SITES="1 2 4"`.
 - `t1-block-edit.sh` — `post.edit_parts` changes only the target block (text, heading level, alt, href, insert/remove), block template reported, slug-change rules (T1, T11, #285).

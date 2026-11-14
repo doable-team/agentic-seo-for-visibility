@@ -40,6 +40,9 @@ function visibility_uninstall_site() {
     }
   }
 
+  // Change snapshots (#291).
+  $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}visibility_changes");
+
   if ($delete_postmeta) {
     $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s", $wpdb->esc_like('_visibility_') . '%'));
     $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->termmeta} WHERE meta_key LIKE %s", $wpdb->esc_like('_visibility_') . '%'));

@@ -66,6 +66,11 @@ class Visibility_Policy {
     return null;
   }
 
+  /** Rollback over REST: same switches as any write (more in #295). */
+  public static function check_rollback($change_id) {
+    return true;
+  }
+
   /**
    * Same check for the REST write routes.
    *

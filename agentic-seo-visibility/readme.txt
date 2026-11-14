@@ -123,6 +123,11 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
   template renders it, so agents know the header and footer are not in the
   page. A published page's address is only changed when a redirect plugin
   can send the old address to the new one.
+* **Undo any change.** Before every change Visibility makes, the plugin saves
+  the page, its SEO fields, custom fields and categories. Each change can be
+  rolled back with one click, from Visibility or from Agentic SEO › Activity
+  in WordPress. If someone edited the page after the change, rollback is
+  refused so their work is never lost.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

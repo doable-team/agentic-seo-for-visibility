@@ -118,6 +118,23 @@ class Visibility_REST {
       ],
     ]);
 
+    // Change log and rollback (#291).
+    register_rest_route('visibility/v1', '/changes', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'list_changes'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+    register_rest_route('visibility/v1', '/changes/(?P<id>\d+)', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'get_change'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+    register_rest_route('visibility/v1', '/changes/(?P<id>\d+)/rollback', [
+      'methods'             => 'POST',
+      'callback'            => [$this, 'rollback_change'],
+      'permission_callback' => [$this, 'authenticate_write'],
+    ]);
+
     // Categories
     register_rest_route('visibility/v1', '/categories', [
       [
@@ -371,7 +388,10 @@ class Visibility_REST {
     }
     $this->apply_term_assignments($post_id, $params);
     $this->apply_featured_media($post_id, $params);
-    return rest_ensure_response($this->serialize_post_full($post_id));
+    $change = Visibility_Changes::commit($post_id, 'rest.create', 'rest', true);
+    $out = $this->serialize_post_full($post_id);
+    $out['changeId'] = $change;
+    return rest_ensure_response($out);
   }
 
   public function update_post(WP_REST_Request $request) {
@@ -391,13 +411,17 @@ class Visibility_REST {
     if ($guard) return new WP_Error('visibility_unsupported', $guard, ['status' => 409]);
     $old_slug = $existing->post_name;
     $old_url = get_permalink($existing);
+    Visibility_Changes::begin($id);
     $updated = Visibility_Content::save($args);
     if (is_wp_error($updated)) {
+      Visibility_Changes::abort($id);
       return $updated;
     }
     $this->apply_term_assignments($id, $params);
     $this->apply_featured_media($id, $params);
+    $change = Visibility_Changes::commit($id, 'rest.update', 'rest');
     $out = $this->serialize_post_full($id);
+    $out['changeId'] = $change;
     $out += Visibility_Executor::slug_note($existing, $old_slug, $old_url);
     return rest_ensure_response($out);
   }
@@ -407,15 +431,19 @@ class Visibility_REST {
     $force = filter_var($request->get_param('force'), FILTER_VALIDATE_BOOLEAN);
     $post = $this->readable_post($id);
     if (is_wp_error($post)) return $post;
-    $result = wp_delete_post($id, $force);
+    if (!$force) Visibility_Changes::begin($id);
+    $result = $force ? wp_delete_post($id, true) : wp_trash_post($id);
     if (!$result) {
+      Visibility_Changes::abort($id);
       return new WP_Error('visibility_delete_failed', __('Could not delete post.', 'agentic-seo-visibility'), ['status' => 500]);
     }
-    return rest_ensure_response([
+    $out = [
       'id'      => $id,
       'deleted' => true,
       'force'   => (bool) $force,
-    ]);
+    ];
+    if (!$force) $out['changeId'] = Visibility_Changes::commit($id, 'rest.trash', 'rest');
+    return rest_ensure_response($out);
   }
 
   /**
@@ -467,6 +495,37 @@ class Visibility_REST {
     if (isset($params['featured_media']) && (int) $params['featured_media'] > 0) {
       set_post_thumbnail($post_id, (int) $params['featured_media']);
     }
+  }
+
+  // ── Changes (#291) ─────────────────────────────────────────────────
+
+  /** GET /changes?postId=&per_page=&page= */
+  public function list_changes(WP_REST_Request $request) {
+    $per = max(1, min(100, (int) ($request->get_param('per_page') ?? 20)));
+    $page = max(1, (int) ($request->get_param('page') ?? 1));
+    $rows = Visibility_Changes::list_rows((int) $request->get_param('postId'), $per, ($page - 1) * $per);
+    return rest_ensure_response(['items' => array_map(function ($r) { return Visibility_Changes::serialize($r); }, (array) $rows), 'page' => $page, 'perPage' => $per]);
+  }
+
+  public function get_change(WP_REST_Request $request) {
+    $row = Visibility_Changes::get((int) $request['id']);
+    if (!$row) return new WP_Error('visibility_not_found', __('Change not found.', 'agentic-seo-visibility'), ['status' => 404]);
+    return rest_ensure_response(Visibility_Changes::serialize($row, true));
+  }
+
+  /** POST /changes/{id}/rollback: 409 visibility_conflict when the post changed since. */
+  public function rollback_change(WP_REST_Request $request) {
+    $refused = Visibility_Policy::check_rollback((int) $request['id']);
+    if (is_wp_error($refused)) return $refused;
+    $r = Visibility_Changes::rollback((int) $request['id'], 'rest');
+    if (is_wp_error($r)) {
+      $map = ['conflict' => 409, 'not_found' => 404, 'already_rolled_back' => 409];
+      $code = $r->get_error_code();
+      $data = (array) $r->get_error_data();
+      $data['status'] = isset($map[$code]) ? $map[$code] : 400;
+      return new WP_Error('visibility_' . $code, $r->get_error_message(), $data);
+    }
+    return rest_ensure_response(['ok' => true] + $r);
   }
 
   // ── Terms (categories + tags) ──────────────────────────────────────

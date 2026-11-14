@@ -121,7 +121,9 @@ class Visibility_Requests {
       return ['ok' => (bool) $rec['ok'], 'result' => $rec['result'], 'error' => $rec['error'], 'errorCode' => $rec['errorCode'] ?? null, 'duplicate' => true, 'reported' => $reported];
     }
 
+    Visibility_Changes::$request_id = $request_id;
     list($ok, $result, $err) = Visibility_Executor::execute($action_type, $payload);
+    Visibility_Changes::$request_id = null;
     $rec = self::get_record($request_id) ?: [];
     $rec = array_merge($rec, [
       'state'      => 'done',
