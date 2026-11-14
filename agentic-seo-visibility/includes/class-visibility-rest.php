@@ -324,6 +324,11 @@ class Visibility_REST {
     ];
     $parent = $request->get_param('parent');
     if ($parent !== null && $parent !== '') $args['post_parent'] = (int) $parent;
+    // Polylang filters queries by language: ?lang=xx for one, default every language.
+    if (Visibility_Languages::active()) {
+      $lang = sanitize_key((string) $request->get_param('lang'));
+      $args['lang'] = ($lang !== '' && in_array($lang, Visibility_Languages::languages(), true)) ? $lang : '';
+    }
     $query = new WP_Query($args);
 
     $items = [];
@@ -398,6 +403,14 @@ class Visibility_REST {
       return $post_id;
     }
     Visibility_Policy::mark_created($post_id);
+    if (!empty($params['language']) || !empty($params['translationOf'])) {
+      $lang = Visibility_Languages::assign($post_id, $params['language'] ?? '', (int) ($params['translationOf'] ?? 0));
+      if (is_wp_error($lang)) {
+        wp_delete_post($post_id, true);
+        $map = ['conflict' => 409, 'not_found' => 404];
+        return new WP_Error('visibility_' . $lang->get_error_code(), $lang->get_error_message(), ['status' => isset($map[$lang->get_error_code()]) ? $map[$lang->get_error_code()] : 400]);
+      }
+    }
     $this->apply_term_assignments($post_id, $params);
     $this->apply_featured_media($post_id, $params);
     $change = Visibility_Changes::commit($post_id, 'rest.create', 'rest', true);
@@ -412,6 +425,8 @@ class Visibility_REST {
     $existing = $this->readable_post($id);
     if (is_wp_error($existing)) return $existing;
     $params = $request->get_json_params() ?: [];
+    $lang = Visibility_Languages::check_edit($id, $params['language'] ?? $request->get_param('lang'));
+    if ($lang) return new WP_Error('visibility_' . $lang[0], $lang[1], ['status' => 409]);
     // Optimistic lock: refuse when the post changed since the caller read it.
     if (Visibility_Content::is_stale($id, $params['modifiedGmt'] ?? null)) {
       return new WP_Error('visibility_conflict', __('The post was changed after it was read. Read it again and retry.', 'agentic-seo-visibility'), [
@@ -679,7 +694,7 @@ class Visibility_REST {
       'modified'    => $this->safe_iso($post->post_modified_gmt),
       'modifiedGmt' => Visibility_Content::modified_gmt($post),
       'createdByVisibility' => Visibility_Policy::created_by_visibility($post->ID),
-    ];
+    ] + (Visibility_Languages::active() ? ['language' => Visibility_Languages::of($post->ID)] : []);
   }
 
   /**
@@ -714,6 +729,8 @@ class Visibility_REST {
       'editor'       => Visibility_Read::editor_of($post),
       'blockTemplate' => Visibility_Read::block_template_of($post),
       'createdByVisibility' => Visibility_Policy::created_by_visibility($post->ID),
+      'language'     => Visibility_Languages::of($post->ID),
+      'translations' => Visibility_Languages::translations($post->ID),
       'categories'   => array_map(fn($c) => ['id' => (int) $c->term_id, 'name' => $c->name, 'slug' => $c->slug], $categories),
       'tags'         => array_map(fn($t) => ['id' => (int) $t->term_id, 'name' => $t->name, 'slug' => $t->slug], $tags),
       'featuredMedia' => $featuredId > 0 ? $this->serialize_media($featuredId) : null,

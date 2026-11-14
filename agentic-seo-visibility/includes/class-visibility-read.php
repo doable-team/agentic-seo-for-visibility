@@ -246,7 +246,7 @@ class Visibility_Read {
 
     $multilingual = null;
     if (function_exists('pll_languages_list')) {
-      $multilingual = ['slug' => 'polylang', 'name' => 'Polylang', 'version' => defined('POLYLANG_VERSION') ? POLYLANG_VERSION : null, 'languages' => array_values((array) pll_languages_list()), 'default' => function_exists('pll_default_language') ? pll_default_language() : null];
+      $multilingual = Visibility_Languages::describe();
     } elseif (defined('ICL_SITEPRESS_VERSION')) {
       $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
       $multilingual = ['slug' => 'wpml', 'name' => 'WPML', 'version' => ICL_SITEPRESS_VERSION, 'languages' => is_array($langs) ? array_keys($langs) : [], 'default' => apply_filters('wpml_default_language', null)];
@@ -307,7 +307,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ],
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang'],
     ];
   }
 }

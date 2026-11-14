@@ -178,6 +178,10 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Cloudflare:** when the Cloudflare plugin is connected (including APO),
   the changed page is purged from Cloudflare too, through the plugin's own
   connection.
+* **Polylang:** every page reports its language and its translations.
+  Agents must say which language they are editing, so they never change the
+  wrong one, and editing a page never touches its translations. New drafts
+  can be created in a language and linked to the page they translate.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

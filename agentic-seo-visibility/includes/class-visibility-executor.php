@@ -43,6 +43,7 @@ class Visibility_Executor {
     }
     // The owner's switches are checked here, not only on the server.
     $refused = Visibility_Policy::check_action($action_type, $payload);
+    if (!$refused) $refused = Visibility_Languages::check_action($action_type, $payload);
     if ($refused) {
       return self::fail($refused[0], $refused[1]);
     }
@@ -164,6 +165,13 @@ class Visibility_Executor {
       return [false, null, $post_id->get_error_message()];
     }
     Visibility_Policy::mark_created($post_id);
+    if (!empty($payload['language']) || !empty($payload['translationOf'])) {
+      $lang = Visibility_Languages::assign($post_id, $payload['language'] ?? '', (int) ($payload['translationOf'] ?? 0));
+      if (is_wp_error($lang)) {
+        wp_delete_post($post_id, true);
+        return self::fail($lang->get_error_code(), $lang->get_error_message());
+      }
+    }
     if (!empty($payload['categories']) && is_array($payload['categories'])) {
       wp_set_post_categories($post_id, array_map('intval', $payload['categories']), false);
     }
@@ -779,6 +787,6 @@ class Visibility_Executor {
       'postSlug'    => $post ? $post->post_name : null,
       'postType'    => $post ? $post->post_type : null,
       'modifiedGmt' => $post ? Visibility_Content::modified_gmt($post) : null,
-    ];
+    ] + (Visibility_Languages::active() ? ['language' => Visibility_Languages::of($post_id), 'translations' => Visibility_Languages::translations($post_id)] : []);
   }
 }
