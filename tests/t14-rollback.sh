@@ -55,5 +55,12 @@ for S in ${SITES:-1 2 4}; do
   api $S POST "/changes/$CH4/rollback" >/dev/null
   check "$($WP $S post get $NID --field=post_status)" "trash" "rolling back a created draft trashes it"
   check "$(api $S GET "/changes?postId=$ID" | jget "len(d['items'])>=4")" "True" "GET /changes?postId lists the page's changes"
+
+  # 5. SEO change, then another change to the same post right away (same
+  #    second, other items): rolling back the SEO change is refused too.
+  P5=$($WP $S post create --post_type=page --post_status=publish --post_title="T14 later $RANDOM" --post_content='<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->' --porcelain | tr -d '\r' | tail -1)
+  CH5=$(action $S seo_meta.update "{\"postId\":$P5,\"fields\":{\"metaDescription\":\"first\"}}" | jget "d['result']['changeId']")
+  action $S page.edit_parts "{\"postId\":$P5,\"edits\":[{\"target\":{\"path\":\"0\"},\"op\":\"replace_text\",\"text\":\"later\"}]}" >/dev/null
+  check "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" http://localhost:818$S/wp-json/visibility/v1/changes/$CH5/rollback)" "409" "rollback refused after a later change to other parts of the post"
 done
 summary

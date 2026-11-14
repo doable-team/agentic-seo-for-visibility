@@ -326,16 +326,13 @@ class Visibility_Changes {
     $now = self::state($post_id);
     if (!$now) return new WP_Error('not_found', 'The post no longer exists.');
 
-    // The post must still be exactly as this change left it.
+    // The post must still be exactly as this change left it: any difference
+    // anywhere (content, any meta, terms, SEO values), not only in the items
+    // this change touched. modifiedGmt alone is not enough: it has one-second
+    // resolution and meta-only writes don't move it.
     $changed = json_decode($row->changed, true) ?: [];
-    $drift = $now['modifiedGmt'] !== $after['modifiedGmt'] ? ['post:modified'] : [];
-    foreach ($changed as $item) {
-      if ($item === 'created') continue;
-      list($group, $key) = explode(':', $item, 2);
-      $a = isset($after[$group][$key]) ? $after[$group][$key] : null;
-      $n = isset($now[$group][$key]) ? $now[$group][$key] : null;
-      if ($a !== $n) $drift[] = $item;
-    }
+    $drift = self::diff($after, $now);
+    if ($now['modifiedGmt'] !== $after['modifiedGmt']) $drift[] = 'post:modified';
     if ($drift) {
       return new WP_Error('conflict', 'The page was changed after this change was made, so it was not rolled back: ' . implode(', ', $drift) . '.', ['modifiedGmt' => $now['modifiedGmt'], 'changedSince' => $drift]);
     }
