@@ -15,6 +15,7 @@ in the plugin zip). Each site exposes the plugin with a fixed test token:
 | 8 | http://localhost:8188 | `vis-test-token-8` | Twenty Twenty-Five + SEOPress |
 | 9 | http://localhost:8189 | `vis-test-token-9` | Twenty Twenty-Five + Slim SEO |
 | 10 | http://localhost:8190 | `vis-test-token-10` | Secure Custom Fields (repeater) |
+| 11 | http://localhost:8191 | `vis-test-token-11` | Astra, GeneratePress, Kadence, OceanWP installed (theme options) |
 
 Sites are created with `/home/tulasinath/viswp/site.sh <n> <php> [wp-version]`
 (MariaDB container `viswp-db`, WP admin `admin`/`admin`); `sync.sh` copies the
@@ -53,4 +54,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t3-elementor.sh` — Elementor widget edits by elementId (heading text/level, image alt, button link): front end, CSS regenerated, page opens in the Elementor editor, other widgets untouched, rollback, Rank Math schema once (T3, #320). Site 6.
 - `t6-fields.sh` — ACF fields listed with types, read, updated by field key only when allowlisted, refusals (outside list, token key, bad choice/URL, all-or-nothing), rollback restores them; `SOURCES="acf metabox pods"` adds Meta Box / Pods (T6, #321–#323). Site 7 + `mu/vis-fields-fixture.php`.
 - `t6-repeater.sh` — repeater rows (typed sub fields, row image) and an image field updated by key, bad rows refused, rollback (T6, #321). Site 10: Secure Custom Fields (ACF's free fork with repeater, same API as ACF Pro).
+- `t-theme-options.sh` — theme page options listed per theme, refused until allowlisted, value checked against the theme's choices, front end changes, rollback (#324–#327). Site 11, `THEMES="…"`.
 - `t1-block-edit.sh` — `post.edit_parts` changes only the target block (text, heading level, alt, href, insert/remove), block template reported, slug-change rules (T1, T11, #285).

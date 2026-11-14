@@ -31,7 +31,23 @@ class Visibility_Fields {
    * are labelled and grouped as theme options, never as raw meta.
    */
   public static function theme_options() {
-    return [];
+    return [
+      'astra' => [
+        'site-sidebar-layout'         => ['Sidebar layout', 'select', ['default', 'no-sidebar', 'left-sidebar', 'right-sidebar']],
+        'site-content-layout'         => ['Content layout (legacy)', 'select', ['default', 'boxed-container', 'content-boxed-container', 'plain-container', 'page-builder', 'narrow-container']],
+        'ast-site-content-layout'     => ['Container layout', 'select', ['default', 'normal-width-container', 'narrow-width-container', 'full-width-container']],
+        'site-content-style'          => ['Container style', 'select', ['default', 'unboxed', 'boxed']],
+        'site-sidebar-style'          => ['Sidebar style', 'select', ['default', 'unboxed', 'boxed']],
+        'site-post-title'             => ['Hide title', 'select', ['', 'disabled']],
+        'ast-breadcrumbs-content'     => ['Hide breadcrumbs', 'select', ['', 'disabled']],
+        'ast-featured-img'            => ['Hide featured image', 'select', ['', 'disabled']],
+        'ast-main-header-display'     => ['Hide primary header', 'select', ['', 'disabled']],
+        'ast-global-header-display'   => ['Hide header', 'select', ['', 'disabled']],
+        'footer-sml-layout'           => ['Hide footer', 'select', ['', 'disabled']],
+        'theme-transparent-header-meta' => ['Transparent header', 'select', ['default', 'enabled', 'disabled']],
+        'stick-header-meta'           => ['Sticky header', 'select', ['default', 'enabled', 'disabled']],
+      ],
+    ];
   }
 
   /** The active theme (or its parent) when it has page options we know. */

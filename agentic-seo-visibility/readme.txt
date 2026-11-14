@@ -169,6 +169,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Pods:** text, paragraph, rich text, website, email, phone, number,
   currency, yes/no, simple list and image fields on the post types Pods
   extends, read and changed through Pods itself when allowed.
+* **Theme page options:** Astra's per-page options (layouts, hiding the
+  title, breadcrumbs, header or footer, transparent and sticky header) are
+  listed for agents and can only be changed once you allow them.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
