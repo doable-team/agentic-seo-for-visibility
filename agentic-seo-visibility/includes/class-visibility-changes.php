@@ -27,6 +27,18 @@ class Visibility_Changes {
   /** Meta that WordPress rewrites on its own and that says nothing about the page. */
   const IGNORED_META = ['_edit_lock', '_edit_last', '_encloseme', '_pingme', '_wp_old_date', '_elementor_css', '_elementor_page_assets', '_elementor_element_cache', '_elementor_controls_usage'];
 
+  /**
+   * Caches that plugins rebuild on their own (often when the page is viewed):
+   * never part of a change, never a reason to refuse a rollback.
+   */
+  const IGNORED_META_PREFIXES = ['_uag_', '_uagb_', '_generateblocks_dynamic_css', '_kad_blocks_', '_kadence_blocks_', '_kb_', '_elementor_page_assets', '_elementor_css', '_elementor_element_cache', '_oembed_', '_yoast_wpseo_estimated-reading-time', '_wp_old_slug_cache', '_litespeed', '_wpfc_', '_sg_'];
+
+  public static function ignored_meta($key) {
+    if (in_array($key, self::IGNORED_META, true)) return true;
+    foreach (self::IGNORED_META_PREFIXES as $p) if (strpos($key, $p) === 0) return true;
+    return (bool) apply_filters('visibility_change_ignored_meta', false, $key);
+  }
+
   /** Request id of the action being executed (set by Visibility_Requests::run). */
   public static $request_id = null;
 
@@ -164,7 +176,7 @@ class Visibility_Changes {
     $meta = [];
     $rows = $wpdb->get_results($wpdb->prepare("SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d ORDER BY meta_id", $post_id));
     foreach ((array) $rows as $r) {
-      if (in_array($r->meta_key, self::IGNORED_META, true)) continue;
+      if (self::ignored_meta($r->meta_key)) continue;
       $meta[$r->meta_key][] = $r->meta_value;
     }
     $terms = [];

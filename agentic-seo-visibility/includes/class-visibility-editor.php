@@ -219,6 +219,20 @@ class Visibility_Editor {
         if ($count === 0) return new WP_Error('not_found', sprintf('"%s" is not in this block', $find));
         return $out;
       }
+      $selector = isset($e['selector']) && is_string($e['selector']) && $e['selector'] !== '' ? $e['selector'] : null;
+      if ($selector !== null) {
+        // A named part of the block (".uagb-desc-text", "h2"), in its own HTML.
+        foreach ($pieces as $pc) {
+          $html = substr($src, $pc[0], $pc[1] - $pc[0]);
+          $span = self::selector_span($html, $selector);
+          if ($span === null) continue;
+          $old_inner = substr($html, $span[0], $span[1] - $span[0]);
+          $html = substr($html, 0, $span[0]) . $text . substr($html, $span[1]);
+          $out = substr($src, 0, $pc[0]) . $html . substr($src, $pc[1]);
+          return self::sync_text_attrs($out, $attrs, $old_inner, $text);
+        }
+        return new WP_Error('not_found', sprintf('no "%s" in this block', $selector));
+      }
       if (!empty($node['children'])) {
         return new WP_Error('unsupported', 'this block holds other blocks; target the inner block, or send "find" with the exact text to change');
       }
@@ -228,12 +242,7 @@ class Visibility_Editor {
       $old_inner = substr($html, $span[0], $span[1] - $span[0]);
       $new_html = substr($html, 0, $span[0]) . $text . substr($html, $span[1]);
       $out = substr($src, 0, $pieces[0][0]) . $new_html . substr($src, $pieces[0][1]);
-      // Blocks that also keep the text in a comment attribute.
-      $attrs2 = $attrs;
-      foreach ($attrs2 as $k => $v) {
-        if (is_string($v) && $v !== '' && ($v === $old_inner || $v === trim(wp_strip_all_tags($old_inner)))) $attrs2[$k] = $v === $old_inner ? $text : wp_strip_all_tags($text);
-      }
-      return $attrs2 !== $attrs ? self::with_attrs($out, $attrs2) : $out;
+      return self::sync_text_attrs($out, $attrs, $old_inner, $text);
     }
 
     if ($op === 'set_attr') {
@@ -286,6 +295,29 @@ class Visibility_Editor {
       return $attrs2 !== $attrs ? self::with_attrs($out, $attrs2) : $out;
     }
     return new WP_Error('unsupported', 'unknown op');
+  }
+
+  /** Blocks that also keep the text in a comment attribute: keep it in step. */
+  private static function sync_text_attrs($out, $attrs, $old_inner, $text) {
+    $attrs2 = $attrs;
+    foreach ($attrs2 as $k => $v) {
+      if (is_string($v) && $v !== '' && ($v === $old_inner || $v === trim(wp_strip_all_tags($old_inner)))) $attrs2[$k] = $v === $old_inner ? $text : wp_strip_all_tags($text);
+    }
+    return $attrs2 !== $attrs ? self::with_attrs($out, $attrs2) : $out;
+  }
+
+  /** [start, end) of the content of the first element matching "tag" or ".class" in $html. */
+  private static function selector_span($html, $selector) {
+    if ($selector[0] === '.') {
+      $cls = preg_quote(substr($selector, 1), '#');
+      $re = '#<([a-z][a-z0-9-]*)\b[^>]*\bclass\s*=\s*["\'][^"\']*(?<![\w-])' . $cls . '(?![\w-])[^"\']*["\'][^>]*>#i';
+    } else {
+      $re = '#<(' . preg_quote(strtolower($selector), '#') . ')\b[^>]*>#i';
+    }
+    if (!preg_match($re, $html, $m, PREG_OFFSET_CAPTURE)) return null;
+    $open_end = $m[0][1] + strlen($m[0][0]);
+    $close = self::matching_close($html, strtolower($m[1][0]), $open_end);
+    return $close ? [$open_end, $close[0]] : null;
   }
 
   /** New markup from replace_block / insert_*: sanitised, never trusted. */

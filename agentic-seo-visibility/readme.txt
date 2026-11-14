@@ -154,6 +154,8 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Slim SEO:** title, description, canonical, noindex and social images, for
   posts, pages, categories and tags. Fields Slim SEO has no place for are
   reported back instead of being dropped.
+* **Spectra blocks:** headings, descriptions and image alt text inside
+  Spectra blocks can be changed on their own; every block setting stays.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
