@@ -9,7 +9,7 @@ python3 mock-api.py $PORT "$STATE" & MOCK=$!; trap 'kill $MOCK; $WP $S option de
 $WP $S option update visibility_dev_api_base "http://host.docker.internal:$PORT" >/dev/null
 for o in visibility_controls visibility_allow_publish visibility_disabled visibility_paused_wp; do $WP $S option delete $o >/dev/null 2>&1; done
 code() { echo "$1" | jget "d.get('errorCode')"; }
-http() { curl -s -o /tmp/t13.json -w '%{http_code}' -X "$1" -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' ${3:+--data "$3"} "http://localhost:818$S/wp-json/visibility/v1$2"; }
+http() { curl -s -o /tmp/t13.json -w '%{http_code}' -X "$1" -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' ${3:+--data "$3"} "http://localhost:$((8180+S))/wp-json/visibility/v1$2"; }
 
 LIVE=$($WP $S post create --post_type=page --post_status=publish --post_title="T13 live $RANDOM" --post_content='<!-- wp:paragraph --><p>live</p><!-- /wp:paragraph -->' --porcelain | tr -d '\r' | tail -1)
 LOCK=$($WP $S post create --post_type=page --post_status=publish --post_title="T13 locked $RANDOM" --post_content='<!-- wp:paragraph --><p>locked</p><!-- /wp:paragraph -->' --porcelain | tr -d '\r' | tail -1)
@@ -60,7 +60,7 @@ R=$(action $S post.create_draft '{"title":"T13 post ok"}')
 check "$(echo "$R" | jget "['ok']")" "True" "post.create_draft allowed"
 
 # Pause in WordPress (logged-in admin clicks the button).
-CJ=$(mktemp); U="http://localhost:818$S"
+CJ=$(mktemp); U="http://localhost:$((8180+S))"
 curl -s -c $CJ -b $CJ -o /dev/null $U/wp-login.php
 curl -s -c $CJ -b $CJ -b 'wordpress_test_cookie=WP+Cookie+check' -o /dev/null -d 'log=admin&pwd=admin&wp-submit=Log+In&testcookie=1' $U/wp-login.php
 H=$(curl -s -b $CJ "$U/wp-admin/admin.php?page=visibility")

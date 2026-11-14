@@ -8,7 +8,7 @@ for S in ${SITES:-1 2 3 4}; do
   MARK="vis-faq-$RANDOM$RANDOM"
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaDescription\":\"Schema test\",\"schemaJsonLd\":{\"@context\":\"https://schema.org\",\"@type\":\"FAQPage\",\"@id\":\"https://example.com/#$MARK\",\"mainEntity\":[{\"@type\":\"Question\",\"name\":\"Q \\\"quoted\\\" $MARK\",\"acceptedAnswer\":{\"@type\":\"Answer\",\"text\":\"A\"}}]}}}")
   check "$(echo "$R" | jget "['ok']")" "True" "site $S: seo_meta.update ok"
-  PAGE=$(curl -sL "http://localhost:818$S/?p=$ID")
+  PAGE=$(curl -sL "http://localhost:$((8180+S))/?p=$ID")
   # It must sit inside a JSON-LD script that parses.
   python3 jsonld-check.py "$MARK" <<<"$PAGE" && ok "site $S: injected schema appears exactly once, JSON-LD parses" || bad "site $S: injected schema not exactly once"
 done

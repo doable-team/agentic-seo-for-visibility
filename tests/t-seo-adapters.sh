@@ -9,7 +9,7 @@ for S in $SITES; do
   NAME=$(api $S GET /capabilities | jget "['seo']['plugin']")
   L="site $S ($NAME): "
   ID=$($WP $S post create --post_type=page --post_status=publish --post_title="Adapter page $RANDOM" --post_content="<p>Original body text for the page.</p>" --porcelain | tr -d '\r' | tail -1)
-  curl -sL "http://localhost:818$S/?page_id=$ID" -o /dev/null   # let the SEO plugin build its cache/indexable first
+  curl -sL "http://localhost:$((8180+S))/?page_id=$ID" -o /dev/null   # let the SEO plugin build its cache/indexable first
   T=$RANDOM
   # Rank Math only prints social images from the media library: use one there.
   IMG="https://example.com/og-$T.png"
@@ -26,7 +26,7 @@ for S in $SITES; do
   check "$(echo "$R" | jget "['result']['before']['metaTitle']")" "" "${L}before.metaTitle empty"
   check "$(echo "$R" | jget "['result']['after']['metaTitle']")" "Title $T" "${L}after.metaTitle"
   check "$(echo "$R" | jget "['result']['rendered']['description']")" "Description $T" "${L}rendered.description"
-  PAGE=$(curl -sL "http://localhost:818$S/?page_id=$ID")
+  PAGE=$(curl -sL "http://localhost:$((8180+S))/?page_id=$ID")
   if [ "$NAME" = "slimseo" ]; then  # Slim SEO uses the SEO title/description for social tags
     EXP="{\"title\":\"Title $T\",\"description\":\"Description $T\",\"canonical\":\"https://example.com/c-$T/\",\"og:title\":\"Title $T\",\"og:description\":\"Description $T\",\"og:image\":\"$IMG\"}"
   else
@@ -37,7 +37,7 @@ for S in $SITES; do
   # noindex (SEO plugins drop the canonical on noindex pages, so separately).
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"robotsNoindex\":true}}")
   check "$(echo "$R" | jget "['ok']")" "True" "${L}noindex ok"
-  python3 head-check.py '{"robots_contains":["noindex"]}' "$L" <<<"$(curl -sL "http://localhost:818$S/?page_id=$ID")" && pass=$((pass+1)) || fail=$((fail+1))
+  python3 head-check.py '{"robots_contains":["noindex"]}' "$L" <<<"$(curl -sL "http://localhost:$((8180+S))/?page_id=$ID")" && pass=$((pass+1)) || fail=$((fail+1))
   # Read back through the rich read.
   RR=$(api $S GET "/posts/$ID?include=seo")
   [ "$NAME" = "tsf" ] || [ "$NAME" = "slimseo" ] || check "$(echo "$RR" | jget "['seo']['values']['focusKeyword']")" "keyword $T" "${L}read: focusKeyword"
@@ -46,7 +46,7 @@ for S in $SITES; do
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"\",\"robotsNoindex\":false}}")
   check "$(echo "$R" | jget "['ok']")" "True" "${L}clear ok"
   check "$(echo "$R" | jget "['result']['before']['metaTitle']")" "Title $T" "${L}clear: before.metaTitle"
-  PAGE=$(curl -sL "http://localhost:818$S/?page_id=$ID")
+  PAGE=$(curl -sL "http://localhost:$((8180+S))/?page_id=$ID")
   grep -q "<title>Title $T</title>" <<<"$PAGE" && bad "${L}title not cleared" || ok "${L}title cleared on the page"
   grep -iE '<meta name=.robots.[^>]*noindex' <<<"$PAGE" >/dev/null && bad "${L}noindex still there" || ok "${L}noindex removed"
   if [ "$NAME" = "rankmath" ]; then
@@ -61,7 +61,7 @@ for S in $SITES; do
     check "$(echo "$R" | jget "['errorCode']")" "unsupported" "${L}term SEO refused plainly (AIOSEO Lite has none)"
   else
     check "$(echo "$R" | jget "['ok']")" "True" "${L}term seo_meta.update ok"
-    PAGE=$(curl -sL "http://localhost:818$S/?cat=$CAT")
+    PAGE=$(curl -sL "http://localhost:$((8180+S))/?cat=$CAT")
     python3 head-check.py "{\"title\":\"Cat title $T\",\"description\":\"Cat description $T\"}" "${L}category " <<<"$PAGE" && pass=$((pass+1)) || fail=$((fail+1))
   fi
 done

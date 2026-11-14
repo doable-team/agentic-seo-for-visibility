@@ -7,7 +7,7 @@
 # three plugins active.
 cd "$(dirname "$0")"; . ./lib.sh
 S=${SITE:-1}
-U="http://localhost:818$S"
+U="http://localhost:$((8180+S))"
 IMG="$U/vis-test-og.png"
 C='<!-- wp:uagb/advanced-heading {"block_id":"a1b2c3d4","classMigrate":true,"headingDescToggle":true} -->
 <div class="wp-block-uagb-advanced-heading uagb-block-a1b2c3d4"><h2 class="uagb-heading-text">Spectra heading</h2><p class="uagb-desc-text">Spectra sub text</p></div>

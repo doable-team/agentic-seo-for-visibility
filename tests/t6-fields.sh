@@ -63,7 +63,7 @@ check "$(code "$R")" "invalid" "bad URL refused"
 check "$($WP $S eval "echo get_field('hero_title',$P);")" "New hero" "nothing written when one value is bad"
 R=$(action $S fields.update "{\"postId\":$P,\"fields\":{\"meta:_wp_page_template\":\"x\"}}")
 check "$(code "$R")" "not_allowed" "arbitrary meta key refused"
-check "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' --data '{"type":"page"}' http://localhost:818$S/wp-json/visibility/v1/fields/schema)" "404" "no write route besides the action"
+check "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' --data '{"type":"page"}' http://localhost:$((8180+S))/wp-json/visibility/v1/fields/schema)" "404" "no write route besides the action"
 
 if [[ " $SRC " == *" metabox "* ]]; then
   R=$(action $S fields.update "{\"postId\":$P,\"fields\":{\"metabox:service_tagline\":\"Fast and friendly\",\"metabox:service_level\":\"pro\",\"metabox:service_badge\":$IMG}}")

@@ -13,7 +13,7 @@ api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
 
 F=$(api $S GET "/fields/schema?type=page" | jget "list(f for f in d['fields'] if f['key']=='meta:vis_subtitle')[0]")
 check "$(echo "$F" | python3 -c "import sys,ast; f=ast.literal_eval(sys.stdin.read()); print(f['label'],f['type'],f['source'],f['writable'])")" "Subtitle string meta False" "schema: registered meta listed with label/type, not writable without allowlist"
-check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:818$S/wp-json/visibility/v1/fields/schema?type=nav_menu_item")" "400" "schema: non-public type -> 400"
+check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:$((8180+S))/wp-json/visibility/v1/fields/schema?type=nav_menu_item")" "400" "schema: non-public type -> 400"
 R=$(action $S fields.update "{\"postId\":$P,\"fields\":{\"meta:vis_subtitle\":\"x\"}}")
 check "$(code "$R")" "not_allowed" "no controls: field write refused"
 

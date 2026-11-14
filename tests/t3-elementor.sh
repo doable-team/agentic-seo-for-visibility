@@ -5,7 +5,7 @@
 # Site 6: Astra + Elementor + Rank Math. Builds its page through Elementor's
 # own Document::save as admin.
 cd "$(dirname "$0")"; . ./lib.sh
-S=${SITE:-6}; U="http://localhost:818$S"
+S=${SITE:-6}; U="http://localhost:$((8180+S))"
 IMG=$(api $S POST /media '{"source_url":"http://localhost/vis-test-og.png","title":"elementor hero","alt_text":"old elementor alt"}' | jget "['id']")
 ID=$($WP $S eval-file - <<EOF | tr -d '\r' | tail -1
 <?php

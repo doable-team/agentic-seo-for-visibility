@@ -12,7 +12,7 @@ R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"SP ti
 check "$(echo "$R" | jget "['ok']")" "True" "seo_meta.update into SEOPress"
 check "$($WP $S post meta get $ID _seopress_titles_title)" "SP title" "stored in _seopress_titles_title"
 check "$($WP $S post meta get $ID _seopress_robots_follow)" "yes" "nofollow stored as SEOPress's 'yes'"
-PAGE=$(curl -sL "http://localhost:818$S/?page_id=$ID")
+PAGE=$(curl -sL "http://localhost:$((8180+S))/?page_id=$ID")
 check "$(grep -c 'Agentic SEO for Visibility' <<<"$PAGE")" "0" "our head prints nothing"
 check "$(grep -c 'content="ours"' <<<"$PAGE")" "0" "our stored description not printed"
 python3 head-check.py '{"title":"SP title","description":"SP description","robots_contains":["nofollow"]}' "SEOPress " <<<"$PAGE" && pass=$((pass+1)) || fail=$((fail+1))
