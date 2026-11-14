@@ -141,6 +141,10 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
   and every change outside them is refused, even one sent straight to the
   site. Agentic SEO › Connection shows them and has a **Pause all** button
   that stops every change at once and tells Visibility immediately.
+* **Custom fields.** Agents can read a page's custom fields, and change the
+  ones you allow in Visibility, by name and checked by type. Fields outside
+  your list, and anything that looks like a password, token or plugin
+  internals, are always refused.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

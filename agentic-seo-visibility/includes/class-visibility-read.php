@@ -153,6 +153,8 @@ class Visibility_Read {
    * keys. Read-only in this version.
    */
   public static function fields($post) {
+    // 0.11.0: every field source (ACF, Meta Box, Pods, theme options, registered meta).
+    if (class_exists('Visibility_Fields')) return Visibility_Fields::for_post($post);
     $out = [];
     $registered = get_registered_meta_keys('post', $post->post_type);
     $registered = array_merge(get_registered_meta_keys('post', ''), $registered);
@@ -216,11 +218,7 @@ class Visibility_Read {
       if (defined($def[1])) $builders[] = ['slug' => $slug, 'name' => $def[0], 'version' => (string) constant($def[1]), 'writable' => false];
     }
 
-    $custom_fields = [];
-    if (class_exists('ACF')) $custom_fields[] = ['slug' => 'acf', 'name' => defined('ACF_PRO') ? 'Advanced Custom Fields Pro' : 'Advanced Custom Fields', 'version' => defined('ACF_VERSION') ? ACF_VERSION : null, 'writable' => false];
-    if (defined('RWMB_VER')) $custom_fields[] = ['slug' => 'metabox', 'name' => 'Meta Box', 'version' => RWMB_VER, 'writable' => false];
-    if (defined('PODS_VERSION')) $custom_fields[] = ['slug' => 'pods', 'name' => 'Pods', 'version' => PODS_VERSION, 'writable' => false];
-    if (class_exists('Jet_Engine')) $custom_fields[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => defined('JET_ENGINE_VERSION') ? JET_ENGINE_VERSION : null, 'writable' => false];
+    $custom_fields = Visibility_Fields::sources();
 
     $redirects = null;
     if (defined('REDIRECTION_VERSION')) $redirects = ['slug' => 'redirection', 'name' => 'Redirection', 'version' => REDIRECTION_VERSION];
@@ -309,7 +307,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ],
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write'],
     ];
   }
 }

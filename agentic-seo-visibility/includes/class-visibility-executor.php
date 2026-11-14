@@ -136,6 +136,7 @@ class Visibility_Executor {
       'redirect.create'        => 'exec_redirect_create',
       'redirect.delete'        => 'exec_redirect_delete',
       'change.rollback'        => 'exec_change_rollback',
+      'fields.update'          => 'exec_fields_update',
     ];
     return isset($map[$action_type]) ? $map[$action_type] : null;
   }
@@ -725,6 +726,22 @@ class Visibility_Executor {
       return [true, ['redirectId' => $id, 'deleted' => true], null];
     }
     return [false, null, 'Delete not implemented for ' . $plugin];
+  }
+
+  // ─── Custom fields (#288) ──────────────────────────────────────────────
+
+  /** {postId, fields:{key: value}, modifiedGmt?}: only allowlisted keys, validated by type. */
+  private static function exec_fields_update($payload) {
+    $post_id = intval($payload['postId'] ?? 0);
+    if (!$post_id) return self::fail('invalid', 'postId required');
+    if (!get_post($post_id)) return self::fail('not_found', 'post not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
+    }
+    $values = isset($payload['fields']) && is_array($payload['fields']) ? $payload['fields'] : [];
+    $r = Visibility_Fields::update($post_id, $values);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    return [true, ['postId' => $post_id, 'fields' => $r['fields'], 'before' => (object) $r['before'], 'after' => (object) $r['after'], 'modifiedGmt' => Visibility_Content::modified_gmt($post_id)], null];
   }
 
   // ─── Rollback ──────────────────────────────────────────────────────────

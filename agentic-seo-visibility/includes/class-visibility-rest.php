@@ -118,6 +118,13 @@ class Visibility_REST {
       ],
     ]);
 
+    // Custom fields (#288): the fields of a post type, allowlisted ones writable.
+    register_rest_route('visibility/v1', '/fields/schema', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'fields_schema'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // Change log and rollback (#291).
     register_rest_route('visibility/v1', '/changes', [
       'methods'             => 'GET',
@@ -503,6 +510,24 @@ class Visibility_REST {
     if (isset($params['featured_media']) && (int) $params['featured_media'] > 0) {
       set_post_thumbnail($post_id, (int) $params['featured_media']);
     }
+  }
+
+  // ── Fields (#288) ──────────────────────────────────────────────────
+
+  /** GET /fields/schema?type=page (or &postId= for the groups shown on one post). */
+  public function fields_schema(WP_REST_Request $request) {
+    $post_id = (int) $request->get_param('postId');
+    $type = sanitize_key((string) ($request->get_param('type') ?: ''));
+    if ($post_id) {
+      $post = $this->readable_post($post_id);
+      if (is_wp_error($post)) return $post;
+      $type = $post->post_type;
+    }
+    if ($type === '') $type = 'page';
+    if (!Visibility_Read::type_allowed($type)) {
+      return new WP_Error('visibility_bad_type', __('Post type not available to Visibility.', 'agentic-seo-visibility'), ['status' => 400]);
+    }
+    return rest_ensure_response(['type' => $type, 'fields' => Visibility_Fields::schema($type, $post_id)]);
   }
 
   // ── Changes (#291) ─────────────────────────────────────────────────
