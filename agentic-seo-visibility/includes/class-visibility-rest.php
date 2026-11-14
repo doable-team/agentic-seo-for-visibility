@@ -254,7 +254,11 @@ class Visibility_REST {
     return rest_ensure_response([
       'ok'           => true,
       'allowPublish' => Visibility_Policy::publishing_allowed(),
-      'disabled'     => Visibility_Policy::paused(),
+      // Visibility's own pause flag, as before; the WordPress Pause is reported apart.
+      'disabled'     => get_option('visibility_disabled', '') === '1',
+      'paused'       => Visibility_Policy::paused(),
+      'pausedBy'     => Visibility_Policy::paused_by(),
+      'controls'     => Visibility_Policy::controls(),
     ]);
   }
 
@@ -386,6 +390,7 @@ class Visibility_REST {
     if (is_wp_error($post_id)) {
       return $post_id;
     }
+    Visibility_Policy::mark_created($post_id);
     $this->apply_term_assignments($post_id, $params);
     $this->apply_featured_media($post_id, $params);
     $change = Visibility_Changes::commit($post_id, 'rest.create', 'rest', true);
@@ -648,6 +653,7 @@ class Visibility_REST {
       'date'        => $this->safe_iso($post->post_date_gmt),
       'modified'    => $this->safe_iso($post->post_modified_gmt),
       'modifiedGmt' => Visibility_Content::modified_gmt($post),
+      'createdByVisibility' => Visibility_Policy::created_by_visibility($post->ID),
     ];
   }
 
@@ -682,6 +688,7 @@ class Visibility_REST {
       'author'       => $author ? ['id' => (int) $author->ID, 'name' => $author->display_name] : null,
       'editor'       => Visibility_Read::editor_of($post),
       'blockTemplate' => Visibility_Read::block_template_of($post),
+      'createdByVisibility' => Visibility_Policy::created_by_visibility($post->ID),
       'categories'   => array_map(fn($c) => ['id' => (int) $c->term_id, 'name' => $c->name, 'slug' => $c->slug], $categories),
       'tags'         => array_map(fn($t) => ['id' => (int) $t->term_id, 'name' => $t->name, 'slug' => $t->slug], $tags),
       'featuredMedia' => $featuredId > 0 ? $this->serialize_media($featuredId) : null,

@@ -23,6 +23,7 @@ class Visibility_Settings {
     add_action('admin_post_visibility_pair', [$this, 'handle_pair']);
     add_action('admin_post_visibility_disconnect', [$this, 'handle_disconnect']);
     add_action('admin_post_visibility_author', [$this, 'handle_author']);
+    add_action('admin_post_visibility_pause', [$this, 'handle_pause']);
   }
 
   /** Build the nonce-protected query args for a redirect-after-action.
@@ -132,6 +133,76 @@ class Visibility_Settings {
     exit;
   }
 
+  /** Pause / resume every write from Visibility (#295). */
+  public function handle_pause() {
+    if (!current_user_can('manage_options')) {
+      wp_die(esc_html__('Permission denied.', 'agentic-seo-visibility'));
+    }
+    check_admin_referer('visibility_pause');
+    $on = isset($_POST['visibility_pause']) && sanitize_key(wp_unslash($_POST['visibility_pause'])) === 'on';
+    Visibility_Policy::set_wp_pause($on);
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args($on ? 'paused' : 'resumed'), admin_url('admin.php')));
+    exit;
+  }
+
+  /** Pause button + the owner's controls as Visibility last sent them (read-only). */
+  private function render_controls_box() {
+    $by = Visibility_Policy::paused_by();
+    $c = Visibility_Policy::controls();
+    $labels = [
+      'create_drafts' => __('Create drafts', 'agentic-seo-visibility'),
+      'edit_content'  => __('Edit existing content', 'agentic-seo-visibility'),
+      'edit_meta'     => __('Edit meta tags', 'agentic-seo-visibility'),
+      'edit_fields'   => __('Edit custom fields', 'agentic-seo-visibility'),
+      'images'        => __('Images and alt text', 'agentic-seo-visibility'),
+      'redirects'     => __('Redirects', 'agentic-seo-visibility'),
+      'publish'       => __('Publish', 'agentic-seo-visibility'),
+      'delete'        => __('Delete', 'agentic-seo-visibility'),
+    ];
+    ?>
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:20px 28px;margin-top:20px">
+      <h2 style="margin-top:0;font-size:15px"><?php echo esc_html__('What agents may do on this site', 'agentic-seo-visibility'); ?></h2>
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom:14px">
+        <?php wp_nonce_field('visibility_pause'); ?>
+        <input type="hidden" name="action" value="visibility_pause" />
+        <?php if ($by === 'wordpress') : ?>
+          <p><strong style="color:#b32d2e"><?php echo esc_html__('Paused in WordPress.', 'agentic-seo-visibility'); ?></strong> <?php echo esc_html__('Every change from Visibility is refused until you resume.', 'agentic-seo-visibility'); ?></p>
+          <input type="hidden" name="visibility_pause" value="off" />
+          <button type="submit" class="button button-primary" id="visibility-resume"><?php echo esc_html__('Resume', 'agentic-seo-visibility'); ?></button>
+        <?php else : ?>
+          <?php if ($by === 'visibility') : ?>
+            <p><strong style="color:#b32d2e"><?php echo esc_html__('Paused in Visibility.', 'agentic-seo-visibility'); ?></strong></p>
+          <?php endif; ?>
+          <p class="description"><?php echo esc_html__('Pause stops every change from Visibility at once (reading still works). Visibility is told right away.', 'agentic-seo-visibility'); ?></p>
+          <input type="hidden" name="visibility_pause" value="on" />
+          <button type="submit" class="button" id="visibility-pause"><?php echo esc_html__('Pause all', 'agentic-seo-visibility'); ?></button>
+        <?php endif; ?>
+      </form>
+      <?php if ($c === null) : ?>
+        <p class="description"><?php echo esc_html__('No limits have been set in Visibility yet.', 'agentic-seo-visibility'); ?>
+          <?php if (!Visibility_Policy::publishing_allowed()) echo esc_html__('Publishing is turned off.', 'agentic-seo-visibility'); ?></p>
+      <?php else : ?>
+        <table class="form-table" role="presentation" id="visibility-controls">
+          <tr><th scope="row"><?php echo esc_html__('Allowed', 'agentic-seo-visibility'); ?></th>
+            <td><?php foreach ($labels as $k => $l) : $on = in_array($k, $c['actions'], true); ?>
+              <span style="display:inline-block;margin:0 10px 4px 0"><?php echo $on ? '&#10003;' : '&#10007;'; ?> <?php echo esc_html($l); ?></span>
+            <?php endforeach; ?></td></tr>
+          <tr><th scope="row"><?php echo esc_html__('Content types', 'agentic-seo-visibility'); ?></th>
+            <td><?php echo esc_html($c['postTypes'] ? implode(', ', $c['postTypes']) : __('none', 'agentic-seo-visibility')); ?></td></tr>
+          <tr><th scope="row"><?php echo esc_html__('Locked pages', 'agentic-seo-visibility'); ?></th>
+            <td><?php
+              $names = array_map(function ($id) { $t = get_the_title($id); return $t !== '' ? $t : '#' . $id; }, $c['lockedPostIds']);
+              echo esc_html($names ? implode(', ', $names) : __('none', 'agentic-seo-visibility'));
+            ?></td></tr>
+          <tr><th scope="row"><?php echo esc_html__('Custom fields agents may change', 'agentic-seo-visibility'); ?></th>
+            <td><?php echo esc_html($c['fieldAllowlist'] ? implode(', ', $c['fieldAllowlist']) : __('none', 'agentic-seo-visibility')); ?></td></tr>
+        </table>
+      <?php endif; ?>
+      <p><a href="<?php echo esc_url(trailingslashit(visibility_api_base_url())); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Change these in Visibility (website Settings › WordPress)', 'agentic-seo-visibility'); ?></a></p>
+    </div>
+    <?php
+  }
+
   /** The "Default author" box. */
   private function render_author_box() {
     $current = Visibility_Author::id();
@@ -195,6 +266,10 @@ class Visibility_Settings {
         <div class="notice notice-success"><p><?php echo esc_html__('Connected to Visibility.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'disconnected') : ?>
         <div class="notice notice-info"><p><?php echo esc_html__('Disconnected. Generate a fresh pairing code in Visibility to reconnect.', 'agentic-seo-visibility'); ?></p></div>
+      <?php elseif ($status === 'paused') : ?>
+        <div class="notice notice-warning"><p><?php echo esc_html__('Paused. Visibility can no longer change this site.', 'agentic-seo-visibility'); ?></p></div>
+      <?php elseif ($status === 'resumed') : ?>
+        <div class="notice notice-success"><p><?php echo esc_html__('Resumed.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'author_saved') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Default author saved.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'error') : ?>
@@ -374,6 +449,7 @@ class Visibility_Settings {
           </form>
         <?php endif; ?>
       </div>
+      <?php if ($paired) $this->render_controls_box(); ?>
       <?php if ($paired) $this->render_author_box(); ?>
     </div>
     <?php

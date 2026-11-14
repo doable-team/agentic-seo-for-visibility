@@ -142,6 +142,8 @@ class Visibility_Client {
       ],
       'body' => wp_json_encode([
         'pluginVersion' => VISIBILITY_PLUGIN_VERSION,
+        'paused'        => Visibility_Policy::paused(),
+        'pausedBy'      => Visibility_Policy::paused_by(),
       ]),
     ]);
     if (is_wp_error($resp)) {

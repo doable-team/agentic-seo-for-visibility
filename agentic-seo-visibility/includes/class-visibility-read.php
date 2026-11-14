@@ -300,13 +300,16 @@ class Visibility_Read {
       'permissions'   => [
         'allowPublish' => Visibility_Policy::publishing_allowed(),
         'paused'       => Visibility_Policy::paused(),
+        'pausedBy'     => Visibility_Policy::paused_by(),
+        'controls'     => Visibility_Policy::controls(),
       ],
+      'specialPages'  => Visibility_Policy::special_pages(),
       'cron'          => [
         'wpCronDisabled' => defined('DISABLE_WP_CRON') && DISABLE_WP_CRON,
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ],
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced'],
     ];
   }
 }

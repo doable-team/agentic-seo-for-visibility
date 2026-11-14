@@ -135,6 +135,12 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
   published under the admin who connected the site (or the first
   administrator). Pick someone else under Agentic SEO › Connection. Editing
   existing content never changes its author.
+* **The plugin enforces what you allow in Visibility.** The owner's
+  controls from Visibility (which actions agents may take, which content
+  types, and locked pages agents must never touch) are kept by the plugin
+  and every change outside them is refused, even one sent straight to the
+  site. Agentic SEO › Connection shows them and has a **Pause all** button
+  that stops every change at once and tells Visibility immediately.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

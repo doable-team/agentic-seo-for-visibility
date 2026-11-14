@@ -13,7 +13,7 @@ check "$(c "['theme']['blockTheme']")" "False" "classic theme reported"
 check "$(c "['editor']")" "classic" "Classic Editor -> editor classic"
 check "$(c "sorted(p['name'] for p in d['postTypes'] if p['name'] in ('post','page'))")" "['page', 'post']" "post types post + page"
 check "$(c "list(p['name'] for p in d['postTypes'] if p['name'] in ('attachment','elementor_library','e-floating-buttons'))")" "[]" "attachments and Elementor templates not listed"
-check "$(c "['permissions']")" "{'allowPublish': True, 'paused': False}" "owner switches"
+check "$(c "list(d['permissions'][k] for k in ('allowPublish','paused'))")" "[True, False]" "owner switches"
 C1=$(api 1 GET /capabilities)
 check "$(echo "$C1" | jget "['seo']['plugin']")" "None" "site 1: no SEO plugin"
 check "$(echo "$C1" | jget "['seo']['renderedBy']")" "visibility" "site 1: tags rendered by Visibility"

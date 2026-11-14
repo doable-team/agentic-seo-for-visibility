@@ -162,6 +162,7 @@ class Visibility_Executor {
     if (is_wp_error($post_id)) {
       return [false, null, $post_id->get_error_message()];
     }
+    Visibility_Policy::mark_created($post_id);
     if (!empty($payload['categories']) && is_array($payload['categories'])) {
       wp_set_post_categories($post_id, array_map('intval', $payload['categories']), false);
     }
