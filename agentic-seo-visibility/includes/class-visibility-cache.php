@@ -62,6 +62,20 @@ class Visibility_Cache {
         function () { return has_action('wpfc_clear_post_cache_by_id'); },
         function ($id, $url) { do_action('wpfc_clear_post_cache_by_id', false, $id); return true; },
       ],
+      // SiteGround Speed Optimizer: dynamic cache for the post's URL.
+      'sg-cachepress' => [
+        'SiteGround Speed Optimizer',
+        function () {
+          // Only when one of its page caches is on (dynamic cache on SiteGround
+          // hosting, or file-based caching on any host).
+          return function_exists('sg_cachepress_purge_cache')
+            && (get_option('siteground_optimizer_enable_cache') || get_option('siteground_optimizer_file_caching'));
+        },
+        function ($id, $url) {
+          if ($url === '' || untrailingslashit($url) === untrailingslashit(home_url('/'))) return false; // never the whole site
+          return sg_cachepress_purge_cache($url) !== false;
+        },
+      ],
       // Cloudflare (official plugin, incl. APO): purge the post's URLs through
     ];
     /**
