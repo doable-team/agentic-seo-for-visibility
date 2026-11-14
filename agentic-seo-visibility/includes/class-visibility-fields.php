@@ -125,6 +125,24 @@ class Visibility_Fields {
     return $o;
   }
 
+  private static function schema_metabox($type, $post_id) {
+    if (!function_exists('rwmb_get_registry')) return [];
+    $out = [];
+    $boxes = rwmb_get_registry('meta_box')->get_by(['object_type' => 'post']);
+    foreach ((array) $boxes as $box) {
+      $types = isset($box->meta_box['post_types']) ? (array) $box->meta_box['post_types'] : [];
+      if ($types && !in_array($type, $types, true)) continue;
+      foreach ((array) $box->meta_box['fields'] as $f) {
+        if (empty($f['id'])) continue;
+        $o = ['key' => 'metabox:' . $f['id'], 'label' => !empty($f['name']) ? $f['name'] : $f['id'], 'type' => $f['type'], 'group' => isset($box->meta_box['title']) ? $box->meta_box['title'] : 'Meta Box', 'source' => 'metabox', 'metaKey' => $f['id']];
+        if (!empty($f['options']) && is_array($f['options'])) $o['choices'] = array_map('strval', array_keys($f['options']));
+        if (!empty($f['clone']) || !in_array($f['type'], self::MB_WRITABLE, true)) $o['readOnly'] = true;
+        $out[] = $o;
+      }
+    }
+    return $out;
+  }
+
   // ─── Values ────────────────────────────────────────────────────────────
 
   /** Fields of a post with their current values (the read endpoint's `fields`). */
@@ -142,6 +160,13 @@ class Visibility_Fields {
       case 'acf':
         $v = get_field(substr($f['key'], 4), $post_id, false);
         if ($f['type'] === 'image' && $v) return self::image_value((int) $v);
+        return $v;
+      case 'metabox':
+        $v = rwmb_get_value($f['metaKey'], [], $post_id);
+        if (in_array($f['type'], ['single_image', 'image', 'image_advanced'], true)) {
+          if (is_array($v) && isset($v['ID'])) return self::image_value((int) $v['ID']);
+          if (is_array($v)) return array_values(array_map(function ($i) { return self::image_value((int) (is_array($i) ? $i['ID'] : $i)); }, $v));
+        }
         return $v;
       default:
         $v = get_post_meta($post_id, $f['metaKey'], true);
@@ -291,6 +316,9 @@ class Visibility_Fields {
       case 'acf':
         $ok = update_field(substr($f['key'], 4), $value, $post_id);
         return $ok === false && self::get_value($post_id, $f) !== $value ? new WP_Error('save_failed', sprintf('ACF did not save %s', $f['key'])) : true;
+      case 'metabox':
+        rwmb_set_meta($post_id, $f['metaKey'], $value);
+        return true;
       default:
         if ($value === null || $value === '') delete_post_meta($post_id, $f['metaKey']);
         else update_post_meta($post_id, $f['metaKey'], is_string($value) ? wp_slash($value) : $value);
@@ -302,7 +330,7 @@ class Visibility_Fields {
   public static function sources() {
     $out = [];
     if (class_exists('ACF')) $out[] = ['slug' => 'acf', 'name' => defined('ACF_PRO') ? 'Advanced Custom Fields Pro' : 'Advanced Custom Fields', 'version' => defined('ACF_VERSION') ? ACF_VERSION : null, 'writable' => true];
-    if (defined('RWMB_VER')) $out[] = ['slug' => 'metabox', 'name' => 'Meta Box', 'version' => RWMB_VER, 'writable' => false];
+    if (defined('RWMB_VER')) $out[] = ['slug' => 'metabox', 'name' => 'Meta Box', 'version' => RWMB_VER, 'writable' => true];
     if (defined('PODS_VERSION')) $out[] = ['slug' => 'pods', 'name' => 'Pods', 'version' => PODS_VERSION, 'writable' => false];
     if (class_exists('Jet_Engine')) $out[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => defined('JET_ENGINE_VERSION') ? JET_ENGINE_VERSION : null, 'writable' => false];
     $theme = self::active_theme();

@@ -163,6 +163,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Advanced Custom Fields (free and Pro):** text, textarea, rich text, URL,
   email, image, number, select, true/false and group fields (plus repeater
   rows on ACF Pro) can be read and, when allowed, changed by field key.
+* **Meta Box:** text, textarea, rich text, URL, email, number, select,
+  radio, checkbox, switch and image fields, read and changed through Meta
+  Box's own functions when allowed.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
