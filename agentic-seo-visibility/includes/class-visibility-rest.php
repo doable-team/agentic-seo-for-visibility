@@ -724,6 +724,11 @@ class Visibility_REST {
     if (in_array('terms', $parts, true))   $out['terms'] = Visibility_Read::terms($post);
     if (in_array('images', $parts, true))  $out['images'] = Visibility_Read::images($post->post_content);
     if (in_array('blocks', $parts, true))  $out['blocks'] = Visibility_Read::blocks($post->post_content);
+    // Builder pages: the widgets agents can target by elementId (#286).
+    if (in_array('blocks', $parts, true) || in_array('builder', $parts, true)) {
+      $b = Visibility_Read::builder_of($post);
+      if ($b && $b['writable']) $out['elements'] = Visibility_Builders::elements($post, $b['slug']);
+    }
     return $out;
   }
 

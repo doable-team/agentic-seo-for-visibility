@@ -287,7 +287,14 @@ class Visibility_Executor {
     if (empty($edits)) return self::fail('invalid', 'edits required');
     $builder = Visibility_Read::builder_of($post);
     if ($builder) {
-      return self::fail('unsupported', sprintf('This page is built with %s, which Visibility cannot edit yet. Change its SEO, custom fields or image alt text instead.', $builder['name']));
+      if (empty($builder['writable'])) {
+        return self::fail('unsupported', sprintf('This page is built with %s, which Visibility cannot edit yet. Change its SEO, custom fields or image alt text instead.', $builder['name']));
+      }
+      list($ok, $res, $err) = Visibility_Builders::edit($post, $builder['slug'], $edits);
+      if (!$ok) return is_wp_error($err) ? self::fail($err->get_error_code(), $err->get_error_message()) : self::fail('unsupported', 'builder not available');
+      $out = self::post_result($post_id);
+      $out['builder'] = $builder['slug'];
+      return [true, $out + $res, null];
     }
     $r = Visibility_Editor::apply($post->post_content, $edits);
     if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());

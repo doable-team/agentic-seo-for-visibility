@@ -65,7 +65,7 @@ class Visibility_Read {
       if (!defined($def[1])) continue;
       $v = get_post_meta($post->ID, $def[2], true);
       if (!empty($v) && $v !== 'off') {
-        return ['slug' => $slug, 'name' => $def[0], 'writable' => false];
+        return ['slug' => $slug, 'name' => $def[0], 'writable' => class_exists('Visibility_Builders') && Visibility_Builders::writable($slug)];
       }
     }
     return null;
@@ -215,7 +215,7 @@ class Visibility_Read {
 
     $builders = [];
     foreach (self::BUILDERS as $slug => $def) {
-      if (defined($def[1])) $builders[] = ['slug' => $slug, 'name' => $def[0], 'version' => (string) constant($def[1]), 'writable' => false];
+      if (defined($def[1])) $builders[] = ['slug' => $slug, 'name' => $def[0], 'version' => (string) constant($def[1]), 'writable' => Visibility_Builders::writable($slug)];
     }
 
     $custom_fields = Visibility_Fields::sources();
@@ -307,7 +307,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ],
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit'],
     ];
   }
 }

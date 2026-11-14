@@ -45,4 +45,5 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t-author.sh` — new drafts get the default author (admin, then the user picked in the settings dropdown), edits keep the author, a deleted user falls back to the first administrator with a notice (#275).
 - `t13-owner-controls.sh` — controls pushed from Visibility (actions, content types, locked pages) enforced on actions and REST; Visibility's own drafts count as create_drafts; the WordPress Pause button refuses every write, sends a heartbeat at once and is not cleared by `disabled:false`; `controls:null` resets (T13, #295).
 - `t-fields-meta.sh` — `/fields/schema`, registered meta read and written only when allowlisted and edit_fields is on, denied/unknown keys and bad values refused, rollback (#288).
+- `t-builder-shared.sh` — a builder page reports `builder:<slug>`/writable; without a writing adapter edit_parts is refused as unsupported and post_content untouched (#286).
 - `t1-block-edit.sh` — `post.edit_parts` changes only the target block (text, heading level, alt, href, insert/remove), block template reported, slug-change rules (T1, T11, #285).
