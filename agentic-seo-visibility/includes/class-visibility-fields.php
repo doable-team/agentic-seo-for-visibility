@@ -53,6 +53,16 @@ class Visibility_Fields {
         '_generate-full-width-content'  => ['Content container', 'select', ['', 'true', 'contained']],
         '_generate-disable-headline'    => ['Hide title', 'select', ['', 'true']],
       ],
+      'kadence' => [
+        '_kad_post_title'           => ['Title', 'select', ['default', 'normal', 'above', 'hide']],
+        '_kad_post_layout'          => ['Layout', 'select', ['default', 'normal', 'narrow', 'fullwidth', 'left', 'right']],
+        '_kad_post_content_style'   => ['Content style', 'select', ['default', 'boxed', 'unboxed']],
+        '_kad_post_vertical_padding' => ['Vertical padding', 'select', ['default', 'show', 'hide', 'top', 'bottom']],
+        '_kad_post_feature'         => ['Featured image', 'select', ['default', 'show', 'hide']],
+        '_kad_post_transparent'     => ['Transparent header', 'select', ['default', 'enable', 'disable']],
+        '_kad_post_header'          => ['Disable header', 'boolean', null],
+        '_kad_post_footer'          => ['Disable footer', 'boolean', null],
+      ],
     ];
   }
 
