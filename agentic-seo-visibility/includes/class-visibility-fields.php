@@ -143,6 +143,29 @@ class Visibility_Fields {
     return $out;
   }
 
+  private static function schema_pods($type, $post_id) {
+    if (!function_exists('pods_api')) return [];
+    $pod = pods_api()->load_pod(['name' => $type], false);
+    if (!$pod || empty($pod['fields'])) return [];
+    $out = [];
+    foreach ($pod['fields'] as $name => $f) {
+      $f = is_object($f) && method_exists($f, 'get_args') ? $f->get_args() : (array) $f;
+      $ftype = isset($f['type']) ? $f['type'] : 'text';
+      $o = ['key' => 'pods:' . $name, 'label' => !empty($f['label']) ? $f['label'] : $name, 'type' => $ftype, 'group' => isset($pod['label']) ? $pod['label'] . ' (Pods)' : 'Pods', 'source' => 'pods', 'metaKey' => $name];
+      if ($ftype === 'pick' && (($f['pick_object'] ?? '') === 'custom-simple')) {
+        $raw = isset($f['pick_custom']) ? (string) $f['pick_custom'] : '';
+        $choices = [];
+        foreach (preg_split('/\r\n|\n/', $raw) as $line) { if (trim($line) === '') continue; $choices[] = trim(explode('|', $line)[0]); }
+        $o['choices'] = $choices;
+      } elseif ($ftype === 'pick') {
+        $o['readOnly'] = true; // relationships: read-only
+      }
+      if (!in_array($ftype, self::PODS_WRITABLE, true)) $o['readOnly'] = true;
+      $out[] = $o;
+    }
+    return $out;
+  }
+
   // ─── Values ────────────────────────────────────────────────────────────
 
   /** Fields of a post with their current values (the read endpoint's `fields`). */
@@ -166,6 +189,13 @@ class Visibility_Fields {
         if (in_array($f['type'], ['single_image', 'image', 'image_advanced'], true)) {
           if (is_array($v) && isset($v['ID'])) return self::image_value((int) $v['ID']);
           if (is_array($v)) return array_values(array_map(function ($i) { return self::image_value((int) (is_array($i) ? $i['ID'] : $i)); }, $v));
+        }
+        return $v;
+      case 'pods':
+        $v = pods(get_post_type($post_id), $post_id)->field($f['metaKey'], ['raw' => true]);
+        if ($f['type'] === 'file') {
+          if (is_array($v) && isset($v['ID'])) return self::image_value((int) $v['ID']);
+          if (is_numeric($v)) return self::image_value((int) $v);
         }
         return $v;
       default:
@@ -319,6 +349,9 @@ class Visibility_Fields {
       case 'metabox':
         rwmb_set_meta($post_id, $f['metaKey'], $value);
         return true;
+      case 'pods':
+        $r = pods(get_post_type($post_id), $post_id)->save([$f['metaKey'] => $value]);
+        return $r ? true : new WP_Error('save_failed', sprintf('Pods did not save %s', $f['key']));
       default:
         if ($value === null || $value === '') delete_post_meta($post_id, $f['metaKey']);
         else update_post_meta($post_id, $f['metaKey'], is_string($value) ? wp_slash($value) : $value);
@@ -331,7 +364,7 @@ class Visibility_Fields {
     $out = [];
     if (class_exists('ACF')) $out[] = ['slug' => 'acf', 'name' => defined('ACF_PRO') ? 'Advanced Custom Fields Pro' : 'Advanced Custom Fields', 'version' => defined('ACF_VERSION') ? ACF_VERSION : null, 'writable' => true];
     if (defined('RWMB_VER')) $out[] = ['slug' => 'metabox', 'name' => 'Meta Box', 'version' => RWMB_VER, 'writable' => true];
-    if (defined('PODS_VERSION')) $out[] = ['slug' => 'pods', 'name' => 'Pods', 'version' => PODS_VERSION, 'writable' => false];
+    if (defined('PODS_VERSION')) $out[] = ['slug' => 'pods', 'name' => 'Pods', 'version' => PODS_VERSION, 'writable' => true];
     if (class_exists('Jet_Engine')) $out[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => defined('JET_ENGINE_VERSION') ? JET_ENGINE_VERSION : null, 'writable' => false];
     $theme = self::active_theme();
     if ($theme) $out[] = ['slug' => $theme, 'name' => wp_get_theme($theme)->get('Name') . ' page options', 'version' => wp_get_theme($theme)->get('Version'), 'writable' => true, 'theme' => true];

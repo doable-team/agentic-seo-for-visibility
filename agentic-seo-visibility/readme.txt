@@ -166,6 +166,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Meta Box:** text, textarea, rich text, URL, email, number, select,
   radio, checkbox, switch and image fields, read and changed through Meta
   Box's own functions when allowed.
+* **Pods:** text, paragraph, rich text, website, email, phone, number,
+  currency, yes/no, simple list and image fields on the post types Pods
+  extends, read and changed through Pods itself when allowed.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
