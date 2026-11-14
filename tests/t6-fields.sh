@@ -40,6 +40,8 @@ check "$($WP $S eval "echo get_field('hero_count',$P);")" "7" "number stored"
 check "$($WP $S eval "echo get_field('hero_style',$P);")" "dark" "select stored"
 check "$($WP $S eval "echo get_field('hero_image',$P);")" "$IMG" "image stored by id"
 check "$($WP $S eval "echo get_field('faq',$P)['question'];")" "New Q" "group sub field stored"
+R=$(action $S fields.update "{\"postId\":$P,\"fields\":{\"acf:field_vis_faq\":{\"question\":\"New Q\",\"answer\":\"New A\"}}}")
+check "$(echo "$R" | jget "['ok']")" "True" "group written again with the same value (update_field returns false) still ok"
 check "$($WP $S eval "echo get_post_meta($P,'_hero_title',true);")" "field_vis_hero_title" "ACF field-key reference meta written (ACF can find the field)"
 case "$($WP $S eval "echo get_field('hero_body',$P,false);")" in *script*) bad "wysiwyg not sanitised";; *) ok "wysiwyg sanitised";; esac
 

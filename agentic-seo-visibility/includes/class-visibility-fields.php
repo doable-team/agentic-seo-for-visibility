@@ -386,8 +386,11 @@ class Visibility_Fields {
   private static function write($post_id, array $f, $value) {
     switch ($f['source']) {
       case 'acf':
+        // update_field() returns false for group/repeater fields even when it
+        // saved, and when the value is unchanged: check by reading back.
         $ok = update_field(substr($f['key'], 4), $value, $post_id);
-        return $ok === false && self::get_value($post_id, $f) !== $value ? new WP_Error('save_failed', sprintf('ACF did not save %s', $f['key'])) : true;
+        if ($ok !== false) return true;
+        return self::acf_same(get_field(substr($f['key'], 4), $post_id, false), $value) ? true : new WP_Error('save_failed', sprintf('ACF did not save %s', $f['key']));
       case 'metabox':
         rwmb_set_meta($post_id, $f['metaKey'], $value);
         return true;
@@ -399,6 +402,19 @@ class Visibility_Fields {
         else update_post_meta($post_id, $f['metaKey'], is_string($value) ? wp_slash($value) : $value);
         return true;
     }
+  }
+
+  /** Loose compare of a raw ACF value with what was written (types, row keys). */
+  private static function acf_same($stored, $wanted) {
+    if (is_array($wanted) || is_array($stored)) {
+      if (!is_array($wanted) || !is_array($stored) || count($wanted) !== count($stored)) return false;
+      foreach ($wanted as $k => $v) {
+        if (!array_key_exists($k, $stored) || !self::acf_same($stored[$k], $v)) return false;
+      }
+      return true;
+    }
+    if (is_bool($wanted)) return (bool) $stored === $wanted;
+    return (string) $stored === (string) $wanted;
   }
 
   /** Field plugins and theme options this site has, for /capabilities. */
