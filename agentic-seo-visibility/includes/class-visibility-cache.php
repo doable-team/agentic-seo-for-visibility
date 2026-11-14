@@ -56,6 +56,12 @@ class Visibility_Cache {
         function () { return defined('LSCWP_V') && has_action('litespeed_purge_post'); },
         function ($id, $url) { do_action('litespeed_purge_post', $id); return true; },
       ],
+      // WP Fastest Cache: the post's cache file (desktop + mobile).
+      'wp-fastest-cache' => [
+        'WP Fastest Cache',
+        function () { return has_action('wpfc_clear_post_cache_by_id'); },
+        function ($id, $url) { do_action('wpfc_clear_post_cache_by_id', false, $id); return true; },
+      ],
       // Cloudflare (official plugin, incl. APO): purge the post's URLs through
     ];
     /**

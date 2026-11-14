@@ -7,7 +7,10 @@
 cd "$(dirname "$0")"; . ./lib.sh
 S=${SITE:?SITE}; NAME=${CACHE:?CACHE}; U="http://localhost:$((8180+S))"
 mk() { $WP $S post create --post_type=page --post_status=publish --post_title="$1" --post_content="<!-- wp:paragraph --><p>$2</p><!-- /wp:paragraph -->" --porcelain | tr -d '\r' | tail -1; }
-A=$(mk "T9 A $RANDOM" "A version one"); B=$(mk "T9 B $RANDOM" "B version one")
+# B is created first with a page in between: some caches also clear the
+# changed page's previous/next neighbours and the home page, as they do on
+# any save; B must be none of those.
+B=$(mk "T9 B $RANDOM" "B version one"); mk "T9 spacer $RANDOM" "x" >/dev/null; mk "T9 spacer $RANDOM" "x" >/dev/null; A=$(mk "T9 A $RANDOM" "A version one")
 UA=$($WP $S post url $A | tr -d '\r'); UB=$($WP $S post url $B | tr -d '\r')
 get() { curl -sL -H 'Accept: text/html,application/xhtml+xml' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0' "$1"; }
 # Warm the cache (2 visits), then change both pages behind the cache's back.
