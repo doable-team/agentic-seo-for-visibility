@@ -50,6 +50,12 @@ class Visibility_Cache {
           return true;
         },
       ],
+      // LiteSpeed Cache: purge tag for this post, sent with the response.
+      'litespeed-cache' => [
+        'LiteSpeed Cache',
+        function () { return defined('LSCWP_V') && has_action('litespeed_purge_post'); },
+        function ($id, $url) { do_action('litespeed_purge_post', $id); return true; },
+      ],
       // Cloudflare (official plugin, incl. APO): purge the post's URLs through
     ];
     /**

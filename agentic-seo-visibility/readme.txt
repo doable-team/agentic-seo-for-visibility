@@ -172,8 +172,8 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **Theme page options:** Astra, GeneratePress, Kadence and OceanWP per-page options (layouts, hiding the
   title, breadcrumbs, header or footer, transparent and sticky header) are
   listed for agents and can only be changed once you allow them.
-* **WP Super Cache and W3 Total Cache:** the changed page's cache is cleared
-  after every change.
+* **WP Super Cache, W3 Total Cache and LiteSpeed Cache:** the changed page's
+  cache is cleared after every change.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a
