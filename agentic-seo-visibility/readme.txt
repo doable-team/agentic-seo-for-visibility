@@ -128,6 +128,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
   rolled back with one click, from Visibility or from Agentic SEO › Activity
   in WordPress. If someone edited the page after the change, rollback is
   refused so their work is never lost.
+* **The live page shows the change at once.** After every change the plugin
+  clears the cache of that one page (never the whole site) and the result
+  says which cache was cleared.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

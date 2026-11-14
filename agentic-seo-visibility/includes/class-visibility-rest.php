@@ -391,6 +391,7 @@ class Visibility_REST {
     $change = Visibility_Changes::commit($post_id, 'rest.create', 'rest', true);
     $out = $this->serialize_post_full($post_id);
     $out['changeId'] = $change;
+    $out['cachePurged'] = Visibility_Cache::purge($post_id);
     return rest_ensure_response($out);
   }
 
@@ -422,6 +423,7 @@ class Visibility_REST {
     $change = Visibility_Changes::commit($id, 'rest.update', 'rest');
     $out = $this->serialize_post_full($id);
     $out['changeId'] = $change;
+    $out['cachePurged'] = Visibility_Cache::purge($id);
     $out += Visibility_Executor::slug_note($existing, $old_slug, $old_url);
     return rest_ensure_response($out);
   }
@@ -443,6 +445,7 @@ class Visibility_REST {
       'force'   => (bool) $force,
     ];
     if (!$force) $out['changeId'] = Visibility_Changes::commit($id, 'rest.trash', 'rest');
+    $out['cachePurged'] = $force ? [] : Visibility_Cache::purge($id);
     return rest_ensure_response($out);
   }
 
@@ -625,6 +628,7 @@ class Visibility_REST {
     elseif (isset($p['alt']) && is_scalar($p['alt'])) $args['alt'] = (string) $p['alt'];
     $res = Visibility_Media::upload($args);
     if (is_wp_error($res)) return $res;
+    $res['cachePurged'] = !empty($res['postId']) ? Visibility_Cache::purge((int) $res['postId']) : [];
     return rest_ensure_response($res);
   }
 

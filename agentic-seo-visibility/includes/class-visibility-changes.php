@@ -357,6 +357,7 @@ class Visibility_Changes {
       'changeId'    => $new_id,
       'modifiedGmt' => Visibility_Content::modified_gmt($post_id),
       'postStatus'  => get_post_status($post_id),
+      'cachePurged' => class_exists('Visibility_Cache') ? Visibility_Cache::purge($post_id) : [],
     ];
   }
 

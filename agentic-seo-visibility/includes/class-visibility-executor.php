@@ -54,7 +54,7 @@ class Visibility_Executor {
       if ($target) Visibility_Changes::abort($target);
       return [false, null, $e->getMessage()];
     }
-    return self::after_write($action_type, $target, $res);
+    return self::after_write($action_type, $target, $res, $payload);
   }
 
   /** Actions that create a post (snapshot after, rollback = trash). */
@@ -71,7 +71,7 @@ class Visibility_Executor {
   }
 
   /** Record the change (changeId) and run the after-write hooks on success. */
-  private static function after_write($action_type, $target, $res) {
+  private static function after_write($action_type, $target, $res, $payload = []) {
     list($ok, $result) = $res;
     $post_id = $target;
     if (in_array($action_type, self::CREATE_ACTIONS, true) && $ok && is_array($result)) $post_id = (int) ($result['postId'] ?? 0);
@@ -83,9 +83,27 @@ class Visibility_Executor {
       $change = Visibility_Changes::commit($post_id, $action_type, 'action', in_array($action_type, self::CREATE_ACTIONS, true));
       $result['changeId'] = $change;
       if (isset($result['modifiedGmt'])) $result['modifiedGmt'] = Visibility_Content::modified_gmt($post_id);
+    }
+    // Clear the changed page's cache so the live page shows the change.
+    $purge = self::purge_target($action_type, $post_id, $payload ?? [], $result);
+    if (is_array($result)) {
+      if ($purge || !isset($result['cachePurged'])) $result['cachePurged'] = $purge ? Visibility_Cache::purge($purge) : [];
       $res[1] = $result;
     }
     return $res;
+  }
+
+  /** Which post's cache an action affects (0 = none). */
+  private static function purge_target($action_type, $post_id, $payload, $result) {
+    if (strpos($action_type, 'media.') === 0) {
+      $media = (int) ($payload['mediaId'] ?? ($result['mediaId'] ?? 0));
+      $parent = $media ? (int) wp_get_post_parent_id($media) : 0;
+      if (!$parent && !empty($payload['postId'])) $parent = (int) $payload['postId'];
+      return $parent;
+    }
+    if ($action_type === 'change.rollback') return 0; // purged by the rollback itself
+    if ($action_type === 'post.delete_permanent') return 0;
+    return (int) $post_id;
   }
 
   private static function method_for($action_type) {
