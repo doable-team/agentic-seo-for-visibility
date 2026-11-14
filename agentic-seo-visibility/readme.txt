@@ -151,6 +151,9 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 * **The SEO Framework:** title, description, canonical, noindex, nofollow,
   Open Graph and Twitter fields, and category/tag SEO are written through The
   SEO Framework's own settings. Structured data joins its schema graph.
+* **Slim SEO:** title, description, canonical, noindex and social images, for
+  posts, pages, categories and tags. Fields Slim SEO has no place for are
+  reported back instead of being dropped.
 
 = 0.10.0 =
 * **Agents can read a page before they change it.** The plugin now returns a

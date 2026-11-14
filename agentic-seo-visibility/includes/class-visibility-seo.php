@@ -912,6 +912,86 @@ class Visibility_SEO_Adapter_TSF extends Visibility_SEO_Adapter {
   }
 }
 
+/** Slim SEO: one `slim_seo` array in post meta and in term meta. */
+class Visibility_SEO_Adapter_SlimSEO extends Visibility_SEO_Adapter {
+  const KEYS = [
+    'metaTitle'       => 'title',
+    'metaDescription' => 'description',
+    'canonical'       => 'canonical',
+    'robotsNoindex'   => 'noindex',
+    'ogImage'         => 'facebook_image',
+    'twitterImage'    => 'twitter_image',
+  ];
+  public function slug() { return 'slimseo'; }
+  public function name() { return 'Slim SEO'; }
+  public function version() { return defined('SLIM_SEO_VER') ? SLIM_SEO_VER : null; }
+  public function fields() { return array_merge(array_keys(self::KEYS), ['schemaJsonLd']); }
+  public function term_fields() { return array_keys(self::KEYS); }
+
+  private static function from($row) {
+    $out = self::blank();
+    $row = is_array($row) ? $row : [];
+    foreach (self::KEYS as $f => $k) {
+      $v = isset($row[$k]) ? $row[$k] : '';
+      $out[$f] = $f === 'robotsNoindex' ? !empty($v) : (is_scalar($v) ? (string) $v : '');
+    }
+    return $out;
+  }
+
+  private static function merge($row, $take) {
+    $row = is_array($row) ? $row : [];
+    foreach ($take as $f => $v) {
+      $k = self::KEYS[$f];
+      if ($f === 'robotsNoindex') $v = $v ? 1 : 0;
+      elseif (in_array($f, ['canonical', 'ogImage', 'twitterImage'], true)) $v = self::url($v);
+      else $v = self::text($v);
+      if ($v === '' || $v === 0) unset($row[$k]); else $row[$k] = $v;
+    }
+    return $row;
+  }
+
+  public function read($post_id) { return self::from(get_post_meta($post_id, 'slim_seo', true)); }
+  public function read_term($term_id, $taxonomy) { return self::from(get_term_meta($term_id, 'slim_seo', true)); }
+
+  public function write($post_id, array $fields) {
+    list($take, $rest) = $this->partition($fields, array_keys(self::KEYS));
+    $row = self::merge(get_post_meta($post_id, 'slim_seo', true), $take);
+    if (empty($row)) delete_post_meta($post_id, 'slim_seo'); else update_post_meta($post_id, 'slim_seo', wp_slash($row));
+    clean_post_cache($post_id);
+    return ['written' => array_keys($take), 'unsupported' => $rest];
+  }
+
+  public function write_term($term_id, $taxonomy, array $fields) {
+    list($take, $rest) = $this->partition($fields, array_keys(self::KEYS));
+    $row = self::merge(get_term_meta($term_id, 'slim_seo', true), $take);
+    if (empty($row)) delete_term_meta($term_id, 'slim_seo'); else update_term_meta($term_id, 'slim_seo', wp_slash($row));
+    clean_term_cache($term_id, $taxonomy);
+    return ['written' => array_keys($take), 'unsupported' => $rest];
+  }
+
+  /** Slim SEO renders from the stored values with its own fallbacks. */
+  public function rendered($post_id) {
+    $post = get_post($post_id);
+    if (!$post) return null;
+    $v = $this->read($post_id);
+    $title = $v['metaTitle'] !== '' ? $v['metaTitle'] : get_the_title($post) . ' – ' . get_bloginfo('name');
+    $desc = $v['metaDescription'] !== '' ? $v['metaDescription'] : wp_trim_words(wp_strip_all_tags($post->post_excerpt !== '' ? $post->post_excerpt : $post->post_content), 30, '');
+    $img = $v['ogImage'] !== '' ? $v['ogImage'] : (string) get_the_post_thumbnail_url($post, 'full');
+    return [
+      'title'              => $title,
+      'description'        => $desc,
+      'canonical'          => $v['canonical'] !== '' ? $v['canonical'] : (string) get_permalink($post),
+      'robots'             => $v['robotsNoindex'] ? 'noindex' : 'index',
+      'ogTitle'            => $title,
+      'ogDescription'      => $desc,
+      'ogImage'            => $img,
+      'twitterTitle'       => $title,
+      'twitterDescription' => $desc,
+      'twitterImage'       => $v['twitterImage'] !== '' ? $v['twitterImage'] : $img,
+    ];
+  }
+}
+
 /** Detected but not written yet. Present so the fallback head stands down. */
 class Visibility_SEO_Adapter_DetectOnly extends Visibility_SEO_Adapter {
   private $slug; private $name; private $version;
@@ -934,7 +1014,7 @@ class Visibility_SEO {
     if (defined('AIOSEO_VERSION') || class_exists('AIOSEO\\Plugin\\AIOSEO')) return new Visibility_SEO_Adapter_AIOSEO();
     if (defined('SEOPRESS_VERSION')) return new Visibility_SEO_Adapter_SEOPress();
     if (defined('THE_SEO_FRAMEWORK_VERSION') || function_exists('the_seo_framework')) return new Visibility_SEO_Adapter_TSF();
-    if (defined('SLIM_SEO_VER')) return new Visibility_SEO_Adapter_DetectOnly('slimseo', 'Slim SEO', SLIM_SEO_VER);
+    if (defined('SLIM_SEO_VER')) return new Visibility_SEO_Adapter_SlimSEO();
     return new Visibility_SEO_Adapter_None();
   }
 

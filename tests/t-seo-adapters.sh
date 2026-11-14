@@ -19,13 +19,20 @@ for S in $SITES; do
   F="{\"metaTitle\":\"Title $T\",\"metaDescription\":\"Description $T\",\"canonical\":\"https://example.com/c-$T/\",\"ogTitle\":\"OG title $T\",\"ogDescription\":\"OG description $T\",\"ogImage\":\"$IMG\",\"twitterTitle\":\"TW title $T\",\"twitterDescription\":\"TW description $T\",\"focusKeyword\":\"keyword $T\",\"notAField\":\"x\"}"
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":$F}")
   check "$(echo "$R" | jget "['ok']")" "True" "${L}seo_meta.update ok"
-  UNSUP="['notAField']"; [ "$NAME" = "tsf" ] && UNSUP="['focusKeyword', 'notAField']"   # TSF has no focus keyword
+  # Fields the SEO plugin has no place for are reported, never dropped silently.
+  UNSUP="['notAField']"; [ "$NAME" = "tsf" ] && UNSUP="['focusKeyword', 'notAField']"
+  [ "$NAME" = "slimseo" ] && UNSUP="['ogTitle', 'ogDescription', 'twitterTitle', 'twitterDescription', 'focusKeyword', 'notAField']"
   check "$(echo "$R" | jget "['result']['unsupportedFields']")" "$UNSUP" "${L}unknown field reported in unsupportedFields"
   check "$(echo "$R" | jget "['result']['before']['metaTitle']")" "" "${L}before.metaTitle empty"
   check "$(echo "$R" | jget "['result']['after']['metaTitle']")" "Title $T" "${L}after.metaTitle"
   check "$(echo "$R" | jget "['result']['rendered']['description']")" "Description $T" "${L}rendered.description"
   PAGE=$(curl -sL "http://localhost:818$S/?page_id=$ID")
-  python3 head-check.py "{\"title\":\"Title $T\",\"description\":\"Description $T\",\"canonical\":\"https://example.com/c-$T/\",\"og:title\":\"OG title $T\",\"og:description\":\"OG description $T\",\"og:image\":\"$IMG\",\"twitter:title\":\"TW title $T\",\"twitter:description\":\"TW description $T\"}" "$L" <<<"$PAGE" && pass=$((pass+1)) || fail=$((fail+1))
+  if [ "$NAME" = "slimseo" ]; then  # Slim SEO uses the SEO title/description for social tags
+    EXP="{\"title\":\"Title $T\",\"description\":\"Description $T\",\"canonical\":\"https://example.com/c-$T/\",\"og:title\":\"Title $T\",\"og:description\":\"Description $T\",\"og:image\":\"$IMG\"}"
+  else
+    EXP="{\"title\":\"Title $T\",\"description\":\"Description $T\",\"canonical\":\"https://example.com/c-$T/\",\"og:title\":\"OG title $T\",\"og:description\":\"OG description $T\",\"og:image\":\"$IMG\",\"twitter:title\":\"TW title $T\",\"twitter:description\":\"TW description $T\"}"
+  fi
+  python3 head-check.py "$EXP" "$L" <<<"$PAGE" && pass=$((pass+1)) || fail=$((fail+1))
   check "$(grep -c '<!-- Agentic SEO for Visibility -->' <<<"$PAGE")" "$([ "$NAME" = None ] && echo 1 || echo 0)" "${L}fallback head only without an SEO plugin"
   # noindex (SEO plugins drop the canonical on noindex pages, so separately).
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"robotsNoindex\":true}}")
@@ -33,7 +40,7 @@ for S in $SITES; do
   python3 head-check.py '{"robots_contains":["noindex"]}' "$L" <<<"$(curl -sL "http://localhost:818$S/?page_id=$ID")" && pass=$((pass+1)) || fail=$((fail+1))
   # Read back through the rich read.
   RR=$(api $S GET "/posts/$ID?include=seo")
-  [ "$NAME" = "tsf" ] || check "$(echo "$RR" | jget "['seo']['values']['focusKeyword']")" "keyword $T" "${L}read: focusKeyword"
+  [ "$NAME" = "tsf" ] || [ "$NAME" = "slimseo" ] || check "$(echo "$RR" | jget "['seo']['values']['focusKeyword']")" "keyword $T" "${L}read: focusKeyword"
   check "$(echo "$RR" | jget "['seo']['values']['robotsNoindex']")" "True" "${L}read: robotsNoindex"
   # Clear title + noindex again.
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"\",\"robotsNoindex\":false}}")
