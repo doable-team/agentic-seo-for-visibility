@@ -11,6 +11,7 @@
  *   yoast        Yoast SEO Premium redirect manager: WPSEO_Redirect_Manager.
  *   aioseo       All in One SEO Pro, Redirection Manager add-on: its Redirect
  *                model (aioseo_redirects table).
+ *   seopress     SEOPress Pro: its redirection post type seopress_404.
  *   srm          Safe Redirect Manager: srm_create_redirect(), redirect_rule posts.
  *   visibility   the plugin's own store (option visibility_redirects), served
  *                on 404s only, so it never hides a real page.
@@ -34,10 +35,11 @@ class Visibility_Redirects {
   const PROVIDERS = [
     'redirection' => ['Redirection', [301, 302, 307, 308, 410]],
     'rankmath'    => ['Rank Math redirections', [301, 302, 307, 410, 451]],
-    'visibility'  => ['Visibility (built in)', [301, 302, 307, 308, 410]],
     'yoast'       => ['Yoast SEO Premium redirects', [301, 302, 307, 410, 451]],
     'aioseo'      => ['All in One SEO redirects', [301, 302, 307, 308, 410]],
+    'seopress'    => ['SEOPress Pro redirections', [301, 302, 307]],
     'srm'         => ['Safe Redirect Manager', [301, 302, 307, 410]],
+    'visibility'  => ['Visibility (built in)', [301, 302, 307, 308, 410]],
   ];
 
   /** Links between a post change and the redirects it added or removed (for rollback). */
@@ -58,6 +60,7 @@ class Visibility_Redirects {
     if (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB') && self::rankmath_module_on()) $out[] = 'rankmath';
     if (class_exists('WPSEO_Redirect_Manager') && class_exists('WPSEO_Redirect')) $out[] = 'yoast';
     if (function_exists('aioseoRedirects') && class_exists('AIOSEO\\Plugin\\Addon\\Redirects\\Models\\Redirect')) $out[] = 'aioseo';
+    if (defined('SEOPRESS_PRO_VERSION') && post_type_exists('seopress_404')) $out[] = 'seopress';
     if (function_exists('srm_create_redirect')) $out[] = 'srm';
     return $out;
   }
@@ -82,6 +85,7 @@ class Visibility_Redirects {
       case 'rankmath':    return defined('RANK_MATH_VERSION') ? (string) RANK_MATH_VERSION : null;
       case 'yoast':       return defined('WPSEO_PREMIUM_VERSION') ? (string) WPSEO_PREMIUM_VERSION : null;
       case 'aioseo':      return defined('AIOSEO_REDIRECTION_MANAGER_VERSION') ? (string) AIOSEO_REDIRECTION_MANAGER_VERSION : null;
+      case 'seopress':    return defined('SEOPRESS_PRO_VERSION') ? (string) SEOPRESS_PRO_VERSION : null;
       case 'srm':         return defined('SRM_VERSION') ? (string) SRM_VERSION : null;
       case 'visibility':  return VISIBILITY_PLUGIN_VERSION;
     }
@@ -717,6 +721,43 @@ class Visibility_Redirects {
     $wpdb->delete($wpdb->prefix . 'aioseo_redirects_hits', ['redirect_id' => (int) $id]); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
     $r->delete();
     if (isset(aioseoRedirects()->server) && is_object(aioseoRedirects()->server) && method_exists(aioseoRedirects()->server, 'rewrite')) aioseoRedirects()->server->rewrite();
+    return true;
+  }
+
+  // ─── SEOPress Pro (C-36) ───────────────────────────────────────────────
+  // Built from SEOPress's redirections guide (origin = relative path in the
+  // title of a seopress_404 post, absolute destination) and the meta keys the
+  // free SEOPress reads: _seopress_redirections_enabled / _type / _value /
+  // _logged_status.
+
+
+  private static function list_seopress() {
+    $ids = get_posts(['post_type' => 'seopress_404', 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids', 'orderby' => 'ID', 'order' => 'ASC']);
+    $out = [];
+    foreach ($ids as $id) {
+      $value = (string) get_post_meta($id, '_seopress_redirections_value', true);
+      $type = (int) get_post_meta($id, '_seopress_redirections_type', true);
+      if ($value === '' && !$type) continue; // a logged 404 without a redirect
+      $tp = self::to_path($value);
+      $out[] = self::item('seopress', $id, self::from_relative_slash(get_post_field('post_title', $id, 'raw')), $tp !== null ? $tp : $value, $type ?: 301, get_post_meta($id, '_seopress_redirections_enabled', true) === 'yes' && get_post_status($id) === 'publish', get_post_meta($id, '_seopress_redirections_enabled_regex', true) === 'yes');
+    }
+    return $out;
+  }
+
+  private static function create_seopress($source, $target, $type, $group) {
+    $id = wp_insert_post(['post_type' => 'seopress_404', 'post_status' => 'publish', 'post_title' => self::relative($source), 'post_author' => Visibility_Author::id()], true);
+    if (is_wp_error($id)) return new WP_Error('save_failed', 'SEOPress: ' . $id->get_error_message());
+    update_post_meta($id, '_seopress_redirections_enabled', 'yes');
+    update_post_meta($id, '_seopress_redirections_type', (int) $type);
+    update_post_meta($id, '_seopress_redirections_value', esc_url_raw(self::absolute($target)));
+    update_post_meta($id, '_seopress_redirections_logged_status', 'both');
+    $r = self::find_id('seopress', $id);
+    return $r ?: new WP_Error('not_applied', 'SEOPress did not keep the redirect.');
+  }
+
+  private static function delete_seopress($id) {
+    if (get_post_type((int) $id) !== 'seopress_404') return new WP_Error('not_found', 'redirect not found');
+    wp_delete_post((int) $id, true);
     return true;
   }
 
