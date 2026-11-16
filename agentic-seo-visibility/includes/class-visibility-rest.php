@@ -125,6 +125,18 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
 
+    // Terms of any public taxonomy, e.g. WooCommerce product categories (#289).
+    register_rest_route('visibility/v1', '/terms', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'list_terms'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+    register_rest_route('visibility/v1', '/terms/(?P<id>\d+)', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'get_term'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // Change log and rollback (#291).
     register_rest_route('visibility/v1', '/changes', [
       'methods'             => 'GET',
@@ -324,12 +336,8 @@ class Visibility_REST {
     ];
     $parent = $request->get_param('parent');
     if ($parent !== null && $parent !== '') $args['post_parent'] = (int) $parent;
-    // Polylang filters queries by language: ?lang=xx for one, default every language.
-    if (Visibility_Languages::active()) {
-      $lang = sanitize_key((string) $request->get_param('lang'));
-      $args['lang'] = ($lang !== '' && in_array($lang, Visibility_Languages::languages(), true)) ? $lang : '';
-    }
-    $query = new WP_Query($args);
+    // Multilingual sites filter queries by language: ?lang=xx for one, default every language.
+    $query = Visibility_Languages::query($args, sanitize_key((string) $request->get_param('lang')), function ($a) { return new WP_Query($a); });
 
     $items = [];
     foreach ($query->posts as $p) {
@@ -545,6 +553,46 @@ class Visibility_REST {
     return rest_ensure_response(['type' => $type, 'fields' => Visibility_Fields::schema($type, $post_id)]);
   }
 
+  // ── Terms (#289) ───────────────────────────────────────────────────
+
+  private function term_taxonomy($request) {
+    $tax = sanitize_key((string) ($request->get_param('taxonomy') ?: 'category'));
+    if (!in_array($tax, Visibility_WooCommerce::TERM_TAXONOMIES, true) || !taxonomy_exists($tax)) {
+      return new WP_Error('visibility_bad_type', sprintf(
+        /* translators: %s: list of taxonomies. */
+        __('Taxonomy not available to Visibility. Available: %s.', 'agentic-seo-visibility'),
+        implode(', ', array_filter(Visibility_WooCommerce::TERM_TAXONOMIES, 'taxonomy_exists'))
+      ), ['status' => 400]);
+    }
+    return $tax;
+  }
+
+  /** GET /terms?taxonomy=product_cat&search=&per_page=&page= */
+  public function list_terms(WP_REST_Request $request) {
+    $tax = $this->term_taxonomy($request);
+    if (is_wp_error($tax)) return $tax;
+    $per = max(1, min(100, (int) ($request->get_param('per_page') ?? 50)));
+    $page = max(1, (int) ($request->get_param('page') ?? 1));
+    $args = ['taxonomy' => $tax, 'hide_empty' => false, 'number' => $per, 'offset' => ($page - 1) * $per, 'search' => (string) ($request->get_param('search') ?? ''), 'orderby' => 'name'];
+    $terms = get_terms($args);
+    if (is_wp_error($terms)) return $terms;
+    $total = (int) wp_count_terms(['taxonomy' => $tax, 'hide_empty' => false, 'search' => $args['search']]);
+    return rest_ensure_response([
+      'taxonomy' => $tax,
+      'items' => array_map(function ($t) { return ['id' => (int) $t->term_id, 'name' => $t->name, 'slug' => $t->slug, 'parent' => (int) $t->parent, 'count' => (int) $t->count, 'link' => get_term_link($t)]; }, array_values($terms)),
+      'page' => $page, 'perPage' => $per, 'total' => $total, 'totalPages' => (int) ceil($total / $per),
+    ]);
+  }
+
+  /** GET /terms/{id}?taxonomy=product_cat: name, slug, description and SEO. */
+  public function get_term(WP_REST_Request $request) {
+    $tax = $this->term_taxonomy($request);
+    if (is_wp_error($tax)) return $tax;
+    $term = get_term((int) $request['id'], $tax);
+    if (!$term || is_wp_error($term)) return new WP_Error('visibility_no_post', __('Term not found.', 'agentic-seo-visibility'), ['status' => 404]);
+    return rest_ensure_response(Visibility_WooCommerce::read_term($term));
+  }
+
   // ── Changes (#291) ─────────────────────────────────────────────────
 
   /** GET /changes?postId=&per_page=&page= */
@@ -741,6 +789,8 @@ class Visibility_REST {
     if (in_array('terms', $parts, true))   $out['terms'] = Visibility_Read::terms($post);
     if (in_array('images', $parts, true))  $out['images'] = Visibility_Read::images($post->post_content);
     if (in_array('blocks', $parts, true))  $out['blocks'] = Visibility_Read::blocks($post->post_content);
+    // Products (#289): their shop fields; price and stock read-only.
+    if ($post->post_type === 'product' && Visibility_WooCommerce::active()) $out['product'] = Visibility_WooCommerce::read($post->ID);
     // Builder pages: the widgets agents can target by elementId (#286).
     if (in_array('blocks', $parts, true) || in_array('builder', $parts, true)) {
       $b = Visibility_Read::builder_of($post);

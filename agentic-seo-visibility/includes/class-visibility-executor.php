@@ -48,6 +48,11 @@ class Visibility_Executor {
       return self::fail($refused[0], $refused[1]);
     }
     $target = self::target_post($action_type, $payload);
+    // Shops (#289): price, stock, tax, shipping and variation data are never written.
+    if ($target && Visibility_WooCommerce::is_product($target) && isset($payload['fields']) && is_array($payload['fields'])) {
+      $bad = Visibility_WooCommerce::commercial_key(array_keys($payload['fields']));
+      if ($bad !== null) return self::fail('not_allowed', Visibility_WooCommerce::commercial_refusal($bad));
+    }
     if ($target) Visibility_Changes::begin($target);
     try {
       $res = self::{$method}($payload);
@@ -61,14 +66,14 @@ class Visibility_Executor {
   /** Actions that create a post (snapshot after, rollback = trash). */
   const CREATE_ACTIONS = ['post.create_draft', 'page.create_draft'];
   /** Actions that cannot be undone from a snapshot. */
-  const NO_SNAPSHOT = ['post.delete_permanent', 'media.delete', 'media.upload_from_url', 'change.rollback', 'redirect.create', 'redirect.delete', 'category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete'];
+  const NO_SNAPSHOT = ['post.delete_permanent', 'media.delete', 'media.upload_from_url', 'change.rollback', 'redirect.create', 'redirect.delete', 'category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'term.update'];
 
   /** The post (or attachment) an action writes to, for the snapshot. */
   private static function target_post($action_type, $payload) {
     if (in_array($action_type, self::CREATE_ACTIONS, true) || in_array($action_type, self::NO_SNAPSHOT, true)) return 0;
     if ($action_type === 'seo_meta.update' && !empty($payload['termId'])) return 0;
     if (strpos($action_type, 'media.') === 0) return (int) ($payload['mediaId'] ?? 0);
-    return (int) ($payload['postId'] ?? $payload['pageId'] ?? 0);
+    return (int) ($payload['postId'] ?? $payload['pageId'] ?? $payload['productId'] ?? 0);
   }
 
   /** Record the change (changeId) and run the after-write hooks on success. */
@@ -138,6 +143,8 @@ class Visibility_Executor {
       'redirect.delete'        => 'exec_redirect_delete',
       'change.rollback'        => 'exec_change_rollback',
       'fields.update'          => 'exec_fields_update',
+      'product.update'         => 'exec_product_update',
+      'term.update'            => 'exec_term_update',
     ];
     return isset($map[$action_type]) ? $map[$action_type] : null;
   }
@@ -757,6 +764,37 @@ class Visibility_Executor {
     $r = Visibility_Fields::update($post_id, $values);
     if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
     return [true, ['postId' => $post_id, 'fields' => $r['fields'], 'before' => (object) $r['before'], 'after' => (object) $r['after'], 'modifiedGmt' => Visibility_Content::modified_gmt($post_id)], null];
+  }
+
+  // ─── WooCommerce (#289) ────────────────────────────────────────────────
+
+  /** {productId|postId, fields:{name?, description?, shortDescription?, slug?}, modifiedGmt?}: never price or stock. */
+  private static function exec_product_update($payload) {
+    $post_id = intval($payload['productId'] ?? $payload['postId'] ?? 0);
+    if (!$post_id) return self::fail('invalid', 'productId required');
+    if (!Visibility_WooCommerce::is_product($post_id)) return self::fail('not_found', 'product not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The product was changed after it was read. Read it again and retry.');
+    }
+    $fields = isset($payload['fields']) && is_array($payload['fields']) ? $payload['fields'] : [];
+    $post = get_post($post_id);
+    $old_slug = $post->post_name;
+    $old_url = get_permalink($post);
+    $r = Visibility_WooCommerce::update_product($post_id, $fields);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    $out = self::post_result($post_id) + ['fields' => $r['fields'], 'before' => (object) $r['before'], 'after' => (object) $r['after']];
+    $out += self::slug_note($post, $old_slug, $old_url);
+    return [true, $out, null];
+  }
+
+  /** {termId, taxonomy, fields:{name?, slug?, description?}}: product categories, tags and blog categories. */
+  private static function exec_term_update($payload) {
+    $term_id = intval($payload['termId'] ?? 0);
+    if (!$term_id) return self::fail('invalid', 'termId required');
+    $fields = isset($payload['fields']) && is_array($payload['fields']) ? $payload['fields'] : [];
+    $r = Visibility_WooCommerce::update_term($term_id, $payload['taxonomy'] ?? '', $fields);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    return [true, $r, null];
   }
 
   // ─── Rollback ──────────────────────────────────────────────────────────

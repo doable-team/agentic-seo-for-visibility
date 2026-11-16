@@ -64,7 +64,8 @@ class Visibility_Read {
     foreach (self::BUILDERS as $slug => $def) {
       if (!defined($def[1])) continue;
       $v = get_post_meta($post->ID, $def[2], true);
-      if (!empty($v) && $v !== 'off') {
+      // Divi: "on"/"off"; WPBakery: "true"/"false" (switched back to the classic editor).
+      if (!empty($v) && $v !== 'off' && $v !== 'false') {
         return ['slug' => $slug, 'name' => $def[0], 'writable' => class_exists('Visibility_Builders') && Visibility_Builders::writable($slug)];
       }
     }
@@ -208,7 +209,7 @@ class Visibility_Read {
         'hierarchical' => (bool) $obj->hierarchical,
         'supports'     => $supports,
         'editor'       => self::type_editor($name),
-        'writable'     => in_array($name, ['post', 'page'], true),
+        'writable'     => in_array($name, ['post', 'page'], true) || ($name === 'product' && Visibility_WooCommerce::active()),
         'counts'       => $c,
       ];
     }
@@ -245,11 +246,8 @@ class Visibility_Read {
     if (defined('KINSTAMU_VERSION')) $caches[] = ['slug' => 'kinsta', 'name' => 'Kinsta cache', 'version' => KINSTAMU_VERSION];
 
     $multilingual = null;
-    if (function_exists('pll_languages_list')) {
+    if (function_exists('pll_languages_list') || defined('ICL_SITEPRESS_VERSION')) {
       $multilingual = Visibility_Languages::describe();
-    } elseif (defined('ICL_SITEPRESS_VERSION')) {
-      $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
-      $multilingual = ['slug' => 'wpml', 'name' => 'WPML', 'version' => ICL_SITEPRESS_VERSION, 'languages' => is_array($langs) ? array_keys($langs) : [], 'default' => apply_filters('wpml_default_language', null)];
     } elseif (class_exists('TRP_Translate_Press')) {
       $multilingual = ['slug' => 'translatepress', 'name' => 'TranslatePress', 'version' => defined('TRP_PLUGIN_VERSION') ? TRP_PLUGIN_VERSION : null, 'languages' => [], 'default' => null];
     }
@@ -294,7 +292,7 @@ class Visibility_Read {
       'caches'        => $caches,
       'cachePurge'    => Visibility_Cache::active(),
       'multilingual'  => $multilingual,
-      'woocommerce'   => defined('WC_VERSION') ? ['version' => WC_VERSION] : null,
+      'woocommerce'   => Visibility_WooCommerce::describe(),
       'permissions'   => [
         'allowPublish' => Visibility_Policy::publishing_allowed(),
         'paused'       => Visibility_Policy::paused(),
@@ -307,7 +305,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ],
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host'],
     ];
   }
 }

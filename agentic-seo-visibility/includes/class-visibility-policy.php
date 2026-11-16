@@ -59,6 +59,8 @@ class Visibility_Policy {
     'tag.create'            => 'edit_meta',
     'tag.update'            => 'edit_meta',
     'fields.update'         => 'edit_fields',
+    'product.update'        => 'edit_content',
+    'term.update'           => 'edit_meta',
     'media.upload_from_url' => 'images',
     'media.update_meta'     => 'images',
     'redirect.create'       => 'redirects',
@@ -229,7 +231,7 @@ class Visibility_Policy {
 
   /** [controls needed, post id, post type for creates]. */
   private static function needs_for_action($action_type, array $payload) {
-    $post_id = (int) ($payload['postId'] ?? $payload['pageId'] ?? 0);
+    $post_id = (int) ($payload['postId'] ?? $payload['pageId'] ?? $payload['productId'] ?? 0);
     $type = null;
     if ($action_type === 'change.rollback') {
       $row = class_exists('Visibility_Changes') ? Visibility_Changes::get((int) ($payload['changeId'] ?? 0)) : null;
@@ -246,7 +248,7 @@ class Visibility_Policy {
       // An image for a draft Visibility is still building is part of the draft.
       if ($action_type === 'media.upload_from_url' && self::is_visibility_draft($post_id)) $needed = ['create_drafts'];
     }
-    if (in_array($action_type, ['category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'redirect.create', 'redirect.delete'], true)) {
+    if (in_array($action_type, ['category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'redirect.create', 'redirect.delete', 'term.update'], true)) {
       $post_id = 0;
     }
     if ($action_type === 'post.update_meta') {
