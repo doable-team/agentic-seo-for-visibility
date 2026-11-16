@@ -41,6 +41,7 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builders.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builder-elementor.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builder-shortcodes.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builder-beaver.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builder-readers.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-languages.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-woocommerce.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-policy.php';

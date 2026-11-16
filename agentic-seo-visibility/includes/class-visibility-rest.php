@@ -834,6 +834,7 @@ class Visibility_REST {
     if (in_array('blocks', $parts, true) || in_array('builder', $parts, true)) {
       $b = Visibility_Read::builder_of($post);
       if ($b && $b['writable']) $out['elements'] = Visibility_Builders::elements($post, $b['slug']);
+      elseif ($b && in_array($b['slug'], Visibility_Builder_Readers::READ_ONLY, true)) $out['elements'] = Visibility_Builder_Readers::elements($post, $b['slug']);
     }
     return $out;
   }

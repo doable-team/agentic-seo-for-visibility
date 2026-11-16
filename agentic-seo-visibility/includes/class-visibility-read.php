@@ -62,11 +62,19 @@ class Visibility_Read {
 
   public static function builder_of($post) {
     foreach (self::BUILDERS as $slug => $def) {
+      // Bricks, Oxygen, Breakdance: read-only, detected by their own data (C-38–C-40).
+      if (in_array($slug, Visibility_Builder_Readers::READ_ONLY, true)) {
+        if (Visibility_Builder_Readers::version($slug) !== null && Visibility_Builder_Readers::is_page($post, $slug)) {
+          return ['slug' => $slug, 'name' => $def[0], 'writable' => false, 'readable' => true];
+        }
+        continue;
+      }
       if (!defined($def[1])) continue;
       $v = get_post_meta($post->ID, $def[2], true);
       // Divi: "on"/"off"; WPBakery: "true"/"false" (switched back to the classic editor).
       if (!empty($v) && $v !== 'off' && $v !== 'false') {
-        return ['slug' => $slug, 'name' => $def[0], 'writable' => class_exists('Visibility_Builders') && Visibility_Builders::writable($slug)];
+        $w = class_exists('Visibility_Builders') && Visibility_Builders::writable($slug);
+        return ['slug' => $slug, 'name' => $def[0], 'writable' => $w, 'readable' => $w];
       }
     }
     return null;
@@ -216,7 +224,12 @@ class Visibility_Read {
 
     $builders = [];
     foreach (self::BUILDERS as $slug => $def) {
-      if (defined($def[1])) $builders[] = ['slug' => $slug, 'name' => $def[0], 'version' => (string) constant($def[1]), 'writable' => Visibility_Builders::writable($slug)];
+      if (in_array($slug, Visibility_Builder_Readers::READ_ONLY, true)) {
+        $v = Visibility_Builder_Readers::version($slug);
+        if ($v !== null) $builders[] = ['slug' => $slug, 'name' => $def[0], 'version' => $v, 'writable' => false, 'readable' => true];
+        continue;
+      }
+      if (defined($def[1])) $builders[] = ['slug' => $slug, 'name' => $def[0], 'version' => (string) constant($def[1]), 'writable' => Visibility_Builders::writable($slug), 'readable' => Visibility_Builders::writable($slug)];
     }
 
     $custom_fields = Visibility_Fields::sources();
@@ -305,7 +318,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ] + Visibility_Requests::describe(),
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver', 'builder.read'],
     ];
   }
 }
