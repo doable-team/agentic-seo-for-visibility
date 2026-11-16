@@ -9,6 +9,8 @@
  *                picks or a "Visibility" group the plugin finds or creates.
  *   rankmath     Rank Math redirections module: \RankMath\Redirections\DB.
  *   yoast        Yoast SEO Premium redirect manager: WPSEO_Redirect_Manager.
+ *   aioseo       All in One SEO Pro, Redirection Manager add-on: its Redirect
+ *                model (aioseo_redirects table).
  *   srm          Safe Redirect Manager: srm_create_redirect(), redirect_rule posts.
  *   visibility   the plugin's own store (option visibility_redirects), served
  *                on 404s only, so it never hides a real page.
@@ -34,6 +36,7 @@ class Visibility_Redirects {
     'rankmath'    => ['Rank Math redirections', [301, 302, 307, 410, 451]],
     'visibility'  => ['Visibility (built in)', [301, 302, 307, 308, 410]],
     'yoast'       => ['Yoast SEO Premium redirects', [301, 302, 307, 410, 451]],
+    'aioseo'      => ['All in One SEO redirects', [301, 302, 307, 308, 410]],
     'srm'         => ['Safe Redirect Manager', [301, 302, 307, 410]],
   ];
 
@@ -54,6 +57,7 @@ class Visibility_Redirects {
     if (defined('REDIRECTION_VERSION') && class_exists('Red_Item') && class_exists('Red_Group')) $out[] = 'redirection';
     if (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB') && self::rankmath_module_on()) $out[] = 'rankmath';
     if (class_exists('WPSEO_Redirect_Manager') && class_exists('WPSEO_Redirect')) $out[] = 'yoast';
+    if (function_exists('aioseoRedirects') && class_exists('AIOSEO\\Plugin\\Addon\\Redirects\\Models\\Redirect')) $out[] = 'aioseo';
     if (function_exists('srm_create_redirect')) $out[] = 'srm';
     return $out;
   }
@@ -77,6 +81,7 @@ class Visibility_Redirects {
       case 'redirection': return defined('REDIRECTION_VERSION') ? (string) REDIRECTION_VERSION : null;
       case 'rankmath':    return defined('RANK_MATH_VERSION') ? (string) RANK_MATH_VERSION : null;
       case 'yoast':       return defined('WPSEO_PREMIUM_VERSION') ? (string) WPSEO_PREMIUM_VERSION : null;
+      case 'aioseo':      return defined('AIOSEO_REDIRECTION_MANAGER_VERSION') ? (string) AIOSEO_REDIRECTION_MANAGER_VERSION : null;
       case 'srm':         return defined('SRM_VERSION') ? (string) SRM_VERSION : null;
       case 'visibility':  return VISIBILITY_PLUGIN_VERSION;
     }
@@ -651,6 +656,67 @@ class Visibility_Redirects {
     $cur = $m->get_redirect((string) $id);
     if (!$cur) return new WP_Error('not_found', 'redirect not found');
     $m->delete_redirects([$cur]);
+    return true;
+  }
+
+  // ─── All in One SEO Pro (C-35) ─────────────────────────────────────────
+  // Built from the Redirection Manager add-on's public code (aioseo-redirects:
+  // Models\Redirect set()/save()/delete(), getRedirectBySourceUrl(), the
+  // aioseo_redirects table, aioseoRedirects()->server->rewrite()) as its own
+  // REST create/delete routes use them.
+
+
+  private static function list_aioseo() {
+    global $wpdb;
+    $t = $wpdb->prefix . 'aioseo_redirects';
+    if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $t)) !== $t) return []; // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $rows = $wpdb->get_results("SELECT * FROM $t ORDER BY id");
+    $out = [];
+    foreach ((array) $rows as $r) {
+      $target = (string) $r->target_url;
+      $tp = self::to_path($target);
+      if ($tp !== null) $target = $tp;
+      $rules = isset($r->custom_rules) ? (string) $r->custom_rules : '';
+      // Rules with conditions (login state, schedule…) are not plain address rules.
+      $regex = (bool) $r->regex || ($rules !== '' && $rules !== 'null' && $rules !== '[]');
+      $out[] = self::item('aioseo', $r->id, $r->source_url, $target, (int) $r->type, (bool) $r->enabled, $regex, ['group' => (string) $r->group]);
+    }
+    return $out;
+  }
+
+  private static function create_aioseo($source, $target, $type, $group) {
+    $cls = 'AIOSEO\\Plugin\\Addon\\Redirects\\Models\\Redirect';
+    $existing = $cls::getRedirectBySourceUrl($source);
+    if ($existing && $existing->exists()) return new WP_Error('conflict', sprintf('%s already has an All in One SEO redirect.', $source));
+    $r = new $cls();
+    $r->set([
+      'source_url'   => $source,
+      'target_url'   => $target,
+      'type'         => $type,
+      'query_param'  => 'ignore',
+      'group'        => 'manual',
+      'regex'        => false,
+      'ignore_slash' => true,
+      'ignore_case'  => true,
+      'enabled'      => true,
+    ]);
+    $r->save();
+    if (isset(aioseoRedirects()->server) && is_object(aioseoRedirects()->server) && method_exists(aioseoRedirects()->server, 'rewrite')) aioseoRedirects()->server->rewrite();
+    $saved = $cls::getRedirectBySourceUrl($source);
+    if (!$saved || !$saved->exists()) return new WP_Error('not_applied', 'All in One SEO did not keep the redirect.');
+    $item = self::find_id('aioseo', $saved->id);
+    return $item ?: new WP_Error('not_applied', 'All in One SEO did not keep the redirect.');
+  }
+
+  private static function delete_aioseo($id) {
+    global $wpdb;
+    $cls = 'AIOSEO\\Plugin\\Addon\\Redirects\\Models\\Redirect';
+    $r = $cls::getRedirectById((int) $id);
+    if (!$r || !$r->exists()) return new WP_Error('not_found', 'redirect not found');
+    $wpdb->delete($wpdb->prefix . 'aioseo_redirects_hits', ['redirect_id' => (int) $id]); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+    $r->delete();
+    if (isset(aioseoRedirects()->server) && is_object(aioseoRedirects()->server) && method_exists(aioseoRedirects()->server, 'rewrite')) aioseoRedirects()->server->rewrite();
     return true;
   }
 
