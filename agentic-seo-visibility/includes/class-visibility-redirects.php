@@ -674,8 +674,8 @@ class Visibility_Redirects {
     global $wpdb;
     $t = $wpdb->prefix . 'aioseo_redirects';
     if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $t)) !== $t) return []; // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $rows = $wpdb->get_results("SELECT * FROM $t ORDER BY id");
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery -- All in One SEO's redirects table, read as its add-on does.
+    $rows = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}aioseo_redirects ORDER BY id");
     $out = [];
     foreach ((array) $rows as $r) {
       $target = (string) $r->target_url;

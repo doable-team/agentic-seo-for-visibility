@@ -141,7 +141,7 @@ class Visibility_Languages {
   }
 
   private static function wpml_languages() {
-    $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+    $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
     return is_array($langs) ? array_values(array_map('strval', array_keys($langs))) : [];
   }
 
@@ -154,7 +154,7 @@ class Visibility_Languages {
   private static function wpml_details($post_id) {
     $post = get_post((int) $post_id);
     if (!$post) return null;
-    $d = apply_filters('wpml_element_language_details', null, ['element_id' => (int) $post->ID, 'element_type' => $post->post_type]);
+    $d = apply_filters('wpml_element_language_details', null, ['element_id' => (int) $post->ID, 'element_type' => $post->post_type]); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
     if (!is_object($d) || empty($d->language_code)) return null;
     return $d;
   }
@@ -175,7 +175,7 @@ class Visibility_Languages {
     $p = self::provider();
     if ($p === 'polylang') return function_exists('pll_default_language') ? pll_default_language() : null;
     if ($p === 'wpml') {
-      $d = apply_filters('wpml_default_language', null);
+      $d = apply_filters('wpml_default_language', null); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
       return is_string($d) && $d !== '' ? $d : null;
     }
     if ($p === 'translatepress') {
@@ -212,7 +212,7 @@ class Visibility_Languages {
     if ($p === 'wpml') {
       $d = self::wpml_details($post_id);
       if (!$d || empty($d->trid)) return null;
-      $rows = apply_filters('wpml_get_element_translations', null, (int) $d->trid, self::wpml_type(get_post_type((int) $post_id)));
+      $rows = apply_filters('wpml_get_element_translations', null, (int) $d->trid, self::wpml_type(get_post_type((int) $post_id))); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
       $out = [];
       foreach ((array) $rows as $lang => $row) {
         $row = (object) $row;
@@ -224,7 +224,7 @@ class Visibility_Languages {
       $type = get_post_type((int) $post_id);
       foreach (self::languages() as $lang) {
         if (isset($out[$lang])) continue;
-        $id = (int) apply_filters('wpml_object_id', (int) $post_id, $type, false, $lang);
+        $id = (int) apply_filters('wpml_object_id', (int) $post_id, $type, false, $lang); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
         if ($id > 0) $out[$lang] = $id;
       }
       return (object) $out;
@@ -236,7 +236,7 @@ class Visibility_Languages {
   public static function translated_type($type) {
     $p = self::provider();
     if ($p === 'polylang') return function_exists('pll_is_translated_post_type') && pll_is_translated_post_type($type);
-    if ($p === 'wpml') return (bool) apply_filters('wpml_is_translated_post_type', null, $type);
+    if ($p === 'wpml') return (bool) apply_filters('wpml_is_translated_post_type', null, $type); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
     if ($p === 'translatepress') return true;
     return false;
   }
@@ -257,17 +257,17 @@ class Visibility_Languages {
     }
     if ($p === 'wpml') {
       if ($lang === '') {
-        // WPML filters queries by the current language through query
-        // filters; without them the list has every language.
-        $args['suppress_filters'] = true;
+        // WPML narrows queries to the current language through query
+        // filters; the list of every language needs them off.
+        $args['suppress_filters'] = true; // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.SuppressFilters_suppress_filters -- WPML's language filter must not apply to the "every language" list.
         return $fn($args);
       }
       // A scope: a language opens it, null closes it (WPML 5 keeps a stack).
-      do_action('wpml_switch_language', $lang);
+      do_action('wpml_switch_language', $lang); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
       try {
         return $fn($args);
       } finally {
-        do_action('wpml_switch_language', null);
+        do_action('wpml_switch_language', null); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
       }
     }
     return $fn($args);
@@ -365,7 +365,7 @@ class Visibility_Languages {
     if ($source_id && (!$src || empty($src->trid))) {
       return new WP_Error('invalid', sprintf('Post %d has no language in WPML, so a translation cannot be linked to it.', $source_id));
     }
-    do_action('wpml_set_element_language_details', [
+    do_action('wpml_set_element_language_details', [ // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
       'element_id'           => (int) $post_id,
       'element_type'         => self::wpml_type(get_post_type((int) $post_id)),
       'trid'                 => $src ? (int) $src->trid : false,

@@ -232,6 +232,7 @@ class Visibility_Requests {
       'id' => $request_id, 'actionType' => (string) $action_type,
       'state' => 'running', 'claimedAt' => time(),
     ]);
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- atomic once-only claim of a request across processes; the object cache must not serve a stale copy.
     $inserted = $wpdb->query($wpdb->prepare(
       "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
       self::option_name($request_id), $value
@@ -245,6 +246,7 @@ class Visibility_Requests {
 
   public static function get_record($request_id) {
     global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic once-only claim of a request across processes; the object cache must not serve a stale copy.
     $raw = $wpdb->get_var($wpdb->prepare(
       "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::option_name($request_id)
     ));
@@ -255,12 +257,14 @@ class Visibility_Requests {
 
   private static function put_record($request_id, array $rec) {
     global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- atomic once-only claim of a request across processes; the object cache must not serve a stale copy.
     $wpdb->update($wpdb->options, ['option_value' => maybe_serialize($rec)], ['option_name' => self::option_name($request_id)]);
     wp_cache_delete(self::option_name($request_id), 'options');
   }
 
   private static function all_records() {
     global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic once-only claim of a request across processes; the object cache must not serve a stale copy.
     $rows = $wpdb->get_results($wpdb->prepare(
       "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE %s",
       $wpdb->esc_like(self::RECORD_PREFIX) . '%'
@@ -279,6 +283,7 @@ class Visibility_Requests {
     foreach (self::all_records() as $id => $rec) {
       $at = (int) ($rec['finishedAt'] ?? $rec['claimedAt'] ?? 0);
       if (!empty($rec['reported']) && $at > 0 && time() - $at > self::KEEP_FOR) {
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic once-only claim of a request across processes; the object cache must not serve a stale copy.
         $wpdb->delete($wpdb->options, ['option_name' => self::option_name($id)]);
       }
     }

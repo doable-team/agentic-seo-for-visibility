@@ -71,13 +71,13 @@ class Visibility_Cache {
       'litespeed-cache' => [
         'LiteSpeed Cache',
         function () { return defined('LSCWP_V') && has_action('litespeed_purge_post'); },
-        function ($id, $url) { do_action('litespeed_purge_post', $id); return true; },
+        function ($id, $url) { do_action('litespeed_purge_post', $id); return true; }, // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
       ],
       // WP Fastest Cache: the post's cache file (desktop + mobile).
       'wp-fastest-cache' => [
         'WP Fastest Cache',
         function () { return has_action('wpfc_clear_post_cache_by_id'); },
-        function ($id, $url) { do_action('wpfc_clear_post_cache_by_id', false, $id); return true; },
+        function ($id, $url) { do_action('wpfc_clear_post_cache_by_id', false, $id); return true; }, // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
       ],
       // SiteGround Speed Optimizer: dynamic cache for the post's URL.
       'sg-cachepress' => [
@@ -135,7 +135,7 @@ class Visibility_Cache {
    */
   public static function rocket_files_left($url) {
     if ($url === '' || !function_exists('get_rocket_parse_url') || !function_exists('_rocket_get_cache_dirs') || !function_exists('_rocket_get_wp_rocket_cache_path')) return false;
-    if (apply_filters('rocket_url_no_dots', false)) $url = str_replace('.', '_', $url);
+    if (apply_filters('rocket_url_no_dots', false)) $url = str_replace('.', '_', $url); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
     $p = get_rocket_parse_url($url);
     if (empty($p['host'])) return false;
     $path = (string) $p['path'];

@@ -34,6 +34,7 @@ function visibility_uninstall_site() {
     $wpdb->esc_like('_site_transient_timeout_visibility_') . '%',
   ];
   foreach ($like as $pattern) {
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall: remove the plugin's own options, table and meta.
     $names = $wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $pattern));
     foreach ((array) $names as $name) {
       delete_option($name);
@@ -41,28 +42,35 @@ function visibility_uninstall_site() {
   }
 
   // Change snapshots (#291).
+  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- uninstall: remove the plugin's own options, table and meta.
   $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}visibility_changes");
 
   if ($delete_postmeta) {
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall: remove the plugin's own options, table and meta.
     $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s", $wpdb->esc_like('_visibility_') . '%'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall: remove the plugin's own options, table and meta.
     $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->termmeta} WHERE meta_key LIKE %s", $wpdb->esc_like('_visibility_') . '%'));
     wp_cache_flush();
   }
 }
 
-if (is_multisite()) {
-  $site_ids = get_sites(['fields' => 'ids', 'number' => 0]);
-  foreach ($site_ids as $site_id) {
-    switch_to_blog($site_id);
+function visibility_uninstall_network() {
+  global $wpdb;
+  foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $visibility_site_id) {
+    switch_to_blog($visibility_site_id);
     visibility_uninstall_site();
     restore_current_blog();
   }
   // Network-wide copies, if any.
-  global $wpdb;
+  // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall: find the plugin's own network options.
   $names = $wpdb->get_col($wpdb->prepare("SELECT meta_key FROM {$wpdb->sitemeta} WHERE meta_key LIKE %s", $wpdb->esc_like('visibility_') . '%'));
-  foreach ((array) $names as $name) {
-    delete_site_option($name);
+  foreach ((array) $names as $visibility_name) {
+    delete_site_option($visibility_name);
   }
+}
+
+if (is_multisite()) {
+  visibility_uninstall_network();
 } else {
   visibility_uninstall_site();
 }

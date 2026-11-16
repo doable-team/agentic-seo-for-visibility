@@ -40,6 +40,7 @@ class Visibility_Media {
 
     $tmp = download_url($source, 30);
     if (is_wp_error($tmp)) {
+      /* translators: %s: the download error message. */
       return new WP_Error('visibility_download_failed', sprintf(__('Could not download the image: %s', 'agentic-seo-visibility'), $tmp->get_error_message()), ['status' => 400]);
     }
 
@@ -96,7 +97,9 @@ class Visibility_Media {
       'post_status'    => 'inherit',
       'posts_per_page' => 1,
       'fields'         => 'ids',
+      // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- one-off lookup.
       'meta_key'       => self::SOURCE_META,
+      // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- one-off lookup.
       'meta_value'     => $source,
     ]);
     if ($ids) return (int) $ids[0];
@@ -147,8 +150,7 @@ class Visibility_Media {
       'paged'          => $page,
       'orderby'        => 'date',
       'order'          => 'DESC',
-      // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-      'meta_query'     => ['relation' => 'OR',
+      'meta_query'     => ['relation' => 'OR', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- the only way to find images without alt text.
         ['key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS'],
         ['key' => '_wp_attachment_image_alt', 'value' => '', 'compare' => '='],
       ],
@@ -186,9 +188,10 @@ class Visibility_Media {
     global $wpdb;
     $types = array_keys(Visibility_Read::readable_types());
     if (!$types) return [];
-    $in = implode(',', array_fill(0, count($types), '%s'));
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $rows = $wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($in) AND post_status NOT IN ('trash','auto-draft','inherit') AND post_content LIKE %s ORDER BY ID LIMIT %d", array_merge($types, ['%' . $wpdb->esc_like('wp-image-' . (int) $id) . '%', (int) $limit])));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- a one-off lookup of posts containing an image class; no API covers a content search by class.
+    $rows = $wpdb->get_col($wpdb->prepare("SELECT ID, post_type FROM {$wpdb->posts} WHERE post_status NOT IN ('trash','auto-draft','inherit') AND post_content LIKE %s ORDER BY ID LIMIT %d", '%' . $wpdb->esc_like('wp-image-' . (int) $id) . '%', (int) $limit * 4));
+    // Readable content types only.
+    $rows = array_slice(array_values(array_filter($rows, function ($pid) use ($types) { return in_array(get_post_type((int) $pid), $types, true); })), 0, (int) $limit);
     // The LIKE also matches wp-image-12 for 1; keep exact ids only.
     return array_values(array_filter(array_map('intval', $rows), function ($pid) use ($id) {
       return (bool) preg_match('/\bwp-image-' . (int) $id . '\b/', (string) get_post_field('post_content', $pid, 'raw'));

@@ -174,6 +174,7 @@ class Visibility_Changes {
     }
     // Raw rows, so a restore writes back exactly the bytes that were there.
     $meta = [];
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own change log and exact meta snapshots for rollback.
     $rows = $wpdb->get_results($wpdb->prepare("SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d ORDER BY meta_id", $post_id));
     foreach ((array) $rows as $r) {
       if (self::ignored_meta($r->meta_key)) continue;
@@ -246,6 +247,7 @@ class Visibility_Changes {
       $changed[] = 'redirects:linked';
     }
     self::install();
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- the plugin's own change log and exact meta snapshots for rollback.
     $wpdb->insert(self::table(), [
       'request_id'   => (string) (self::$request_id ?: ''),
       'post_id'      => $post_id,
@@ -268,6 +270,7 @@ class Visibility_Changes {
   public static function record_custom($action, array $changed, array $before, array $after, $rollback_of = null) {
     global $wpdb;
     self::install();
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- the plugin's own change log and exact meta snapshots for rollback.
     $wpdb->insert(self::table(), [
       'request_id'   => (string) (self::$request_id ?: ''),
       'post_id'      => 0,
@@ -292,18 +295,20 @@ class Visibility_Changes {
   public static function get($id) {
     global $wpdb;
     self::install();
-    $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . self::table() . ' WHERE id = %d', (int) $id));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own change log table.
+    $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}visibility_changes WHERE id = %d", (int) $id));
     return $row ?: null;
   }
 
   public static function list_rows($post_id = 0, $limit = 50, $offset = 0) {
     global $wpdb;
     self::install();
-    $t = self::table();
     if ($post_id) {
-      return $wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE post_id = %d ORDER BY id DESC LIMIT %d OFFSET %d", $post_id, $limit, $offset));
+      // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own change log table.
+      return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$wpdb->prefix}visibility_changes WHERE post_id = %d ORDER BY id DESC LIMIT %d OFFSET %d", $post_id, $limit, $offset));
     }
-    return $wpdb->get_results($wpdb->prepare("SELECT * FROM $t ORDER BY id DESC LIMIT %d OFFSET %d", $limit, $offset));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own change log table.
+    return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$wpdb->prefix}visibility_changes ORDER BY id DESC LIMIT %d OFFSET %d", $limit, $offset));
   }
 
   /** API shape of a change. $full adds before/after values of the changed items. */
@@ -386,6 +391,7 @@ class Visibility_Changes {
       self::restore($post_id, $before, $changed);
     }
     $new_id = self::commit($post_id, 'change.rollback', $source, false, (int) $row->id);
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own change log and exact meta snapshots for rollback.
     $wpdb->update(self::table(), ['rolled_back_at' => current_time('mysql', true), 'rolled_back_by' => $new_id ? (int) $new_id : null], ['id' => (int) $row->id]);
     /** After a rollback, so builders can rebuild their CSS and caches purge. */
     try {
@@ -414,6 +420,7 @@ class Visibility_Changes {
     if ($result->data === null) return new WP_Error('unsupported', 'This change cannot be rolled back.');
     $changed = json_decode($row->changed, true) ?: [];
     $new_id = self::record_custom('change.rollback', $changed, (array) $after, (array) $before, (int) $row->id);
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own change log and exact meta snapshots for rollback.
     $wpdb->update(self::table(), ['rolled_back_at' => current_time('mysql', true), 'rolled_back_by' => $new_id ? (int) $new_id : null], ['id' => (int) $row->id]);
     $out = ['postId' => 0, 'rolledBack' => (string) $row->id, 'changeId' => $new_id, 'cachePurged' => []];
     if (is_array($result->data)) $out += $result->data;
@@ -442,9 +449,11 @@ class Visibility_Changes {
     }
     // Meta last: save_post hooks above must not leave their own values behind.
     foreach ($meta_keys as $key) {
+      // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- the plugin's own change log and exact meta snapshots for rollback.
       $wpdb->delete($wpdb->postmeta, ['post_id' => $post_id, 'meta_key' => $key]);
       if (isset($before['meta'][$key])) {
         foreach ($before['meta'][$key] as $raw) {
+          // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.SlowDBQuery.slow_db_query_meta_key, WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- the plugin's own change log and exact meta snapshots for rollback.
           $wpdb->insert($wpdb->postmeta, ['post_id' => $post_id, 'meta_key' => $key, 'meta_value' => $raw]);
         }
       }

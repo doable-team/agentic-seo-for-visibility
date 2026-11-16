@@ -284,7 +284,7 @@ class Visibility_SEO_Adapter_Yoast extends Visibility_SEO_Adapter {
       if ($watcher && method_exists($watcher, 'build_indexable')) $watcher->build_indexable($post_id);
     } catch (\Throwable $e) {
       // Fall back to Yoast's own save hook.
-      do_action('wpseo_saved_postdata');
+      do_action('wpseo_saved_postdata'); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- the other plugin's documented hook.
     }
   }
 
