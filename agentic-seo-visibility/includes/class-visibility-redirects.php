@@ -8,6 +8,7 @@
  *   redirection  Redirection (free): Red_Item / Red_Group, in a group the site
  *                picks or a "Visibility" group the plugin finds or creates.
  *   rankmath     Rank Math redirections module: \RankMath\Redirections\DB.
+ *   yoast        Yoast SEO Premium redirect manager: WPSEO_Redirect_Manager.
  *   srm          Safe Redirect Manager: srm_create_redirect(), redirect_rule posts.
  *   visibility   the plugin's own store (option visibility_redirects), served
  *                on 404s only, so it never hides a real page.
@@ -32,6 +33,7 @@ class Visibility_Redirects {
     'redirection' => ['Redirection', [301, 302, 307, 308, 410]],
     'rankmath'    => ['Rank Math redirections', [301, 302, 307, 410, 451]],
     'visibility'  => ['Visibility (built in)', [301, 302, 307, 308, 410]],
+    'yoast'       => ['Yoast SEO Premium redirects', [301, 302, 307, 410, 451]],
     'srm'         => ['Safe Redirect Manager', [301, 302, 307, 410]],
   ];
 
@@ -51,6 +53,7 @@ class Visibility_Redirects {
     $out = [];
     if (defined('REDIRECTION_VERSION') && class_exists('Red_Item') && class_exists('Red_Group')) $out[] = 'redirection';
     if (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB') && self::rankmath_module_on()) $out[] = 'rankmath';
+    if (class_exists('WPSEO_Redirect_Manager') && class_exists('WPSEO_Redirect')) $out[] = 'yoast';
     if (function_exists('srm_create_redirect')) $out[] = 'srm';
     return $out;
   }
@@ -73,6 +76,7 @@ class Visibility_Redirects {
     switch ($slug) {
       case 'redirection': return defined('REDIRECTION_VERSION') ? (string) REDIRECTION_VERSION : null;
       case 'rankmath':    return defined('RANK_MATH_VERSION') ? (string) RANK_MATH_VERSION : null;
+      case 'yoast':       return defined('WPSEO_PREMIUM_VERSION') ? (string) WPSEO_PREMIUM_VERSION : null;
       case 'srm':         return defined('SRM_VERSION') ? (string) SRM_VERSION : null;
       case 'visibility':  return VISIBILITY_PLUGIN_VERSION;
     }
@@ -153,6 +157,13 @@ class Visibility_Redirects {
       return $p === null ? $rel : $p;
     }
     return rtrim($home, '/') . '/' . ltrim($rel, '/');
+  }
+
+  /** Same, with the trailing slash the site's permalinks use (plugins that store paths trimmed). */
+  private static function from_relative_slash($rel) {
+    $p = self::from_relative($rel);
+    if (preg_match('#^https?://#i', $p) || $p === '/' || strpos($p, '?') !== false || preg_match('#\.[a-z0-9]{2,5}$#i', $p)) return $p;
+    return user_trailingslashit(rtrim($p, '/'));
   }
 
   /** Absolute URL for an internal path (for plugins that want one). */
@@ -583,7 +594,7 @@ class Visibility_Redirects {
       foreach ($sources as $s) {
         if (!is_array($s) || !isset($s['pattern'])) continue;
         $exact = ($s['comparison'] ?? 'exact') === 'exact';
-        $out[] = self::item('rankmath', $r->id, self::from_relative($s['pattern']), $target, (int) $r->header_code, $r->status === 'active', !$exact);
+        $out[] = self::item('rankmath', $r->id, self::from_relative_slash($s['pattern']), $target, (int) $r->header_code, $r->status === 'active', !$exact);
       }
     }
     return $out;
@@ -603,6 +614,43 @@ class Visibility_Redirects {
 
   private static function delete_rankmath($id) {
     \RankMath\Redirections\DB::delete([(int) $id]);
+    return true;
+  }
+
+  // ─── Yoast SEO Premium (C-34) ──────────────────────────────────────────
+  // Built from Yoast SEO Premium's redirect classes (classes/redirect/*:
+  // WPSEO_Redirect, WPSEO_Redirect_Manager, option wpseo-premium-redirects-base)
+  // and its documented `wp yoast redirect` commands, which use the same calls.
+
+
+  private static function list_yoast() {
+    $m = new WPSEO_Redirect_Manager();
+    $out = [];
+    foreach ((array) $m->get_all_redirects() as $r) {
+      if (!is_object($r)) continue;
+      $origin = (string) $r->get_origin();
+      $regex = $r->get_format() !== 'plain';
+      $target = (string) $r->get_target();
+      $out[] = self::item('yoast', $origin, $regex ? $origin : self::from_relative_slash($origin), $target === '' ? '' : self::from_relative_slash($target), (int) $r->get_type(), true, $regex);
+    }
+    return $out;
+  }
+
+  private static function create_yoast($source, $target, $type, $group) {
+    $m = new WPSEO_Redirect_Manager('plain');
+    $rel_target = $target === '' ? '' : (preg_match('#^https?://#i', $target) ? $target : self::relative($target));
+    if ($rel_target === '' && $target !== '') $rel_target = '/';
+    $redirect = new WPSEO_Redirect(self::relative($source), $rel_target, $type, 'plain');
+    if (!$m->create_redirect($redirect)) return new WP_Error('save_failed', 'Yoast SEO Premium did not save the redirect.');
+    $r = self::find_id('yoast', $redirect->get_origin());
+    return $r ?: new WP_Error('not_applied', 'Yoast SEO Premium did not keep the redirect.');
+  }
+
+  private static function delete_yoast($id) {
+    $m = new WPSEO_Redirect_Manager();
+    $cur = $m->get_redirect((string) $id);
+    if (!$cur) return new WP_Error('not_found', 'redirect not found');
+    $m->delete_redirects([$cur]);
     return true;
   }
 
