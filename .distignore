@@ -7,3 +7,10 @@
 README.md
 assets/banner.svg
 *.zip
+
+# Test checks, fixtures and paid-plugin stand-ins live outside the plugin
+# folder; listed here too so a zip of the repo root never picks them up.
+tests
+tests/standins
+.github
+RELEASING.md

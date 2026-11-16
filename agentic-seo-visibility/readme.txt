@@ -2,9 +2,9 @@
 Contributors: rankth
 Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.12.0
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,7 +20,7 @@ Pair WordPress with your Visibility project so AI agents can read, draft and imp
 * **Built for agentic SEO workflows.** Visibility's agents can read your posts and pages (content, SEO fields, categories, tags, images), create drafts, and propose changes: SEO titles and descriptions, structured data, internal links, image alt text.
 * **A person approves every live change.** Agents save new posts as drafts. Publishing, and every change to a page that is already live, raises an approval in your Visibility project (Notifications, Approvals tab) showing what will change. Nothing goes live until someone approves it.
 * **The plugin enforces your switches too.** If publishing is turned off or Visibility is paused for this site, the plugin itself refuses the change, even if a request reaches it.
-* **Works with your SEO plugin.** On sites with Yoast SEO, Rank Math or All in One SEO, SEO fields are written into that plugin's own settings and structured data is added to its own schema output, so nothing is printed twice. Without an SEO plugin, the plugin prints the meta description, Open Graph tags, canonical, robots and structured data itself.
+* **Works with your SEO plugin.** On sites with Yoast SEO, Rank Math, All in One SEO, SEOPress, The SEO Framework or Slim SEO, SEO fields are written into that plugin's own settings and structured data is added to its own schema output, so nothing is printed twice. Without one, the Genesis, Divi and Avada themes' own SEO fields are used. Without an SEO plugin, the plugin prints the meta description, Open Graph tags, canonical, robots and structured data itself.
 * **Existing page content is kept intact.** When an agent edits one part of a page, embeds, forms and scripts elsewhere on the page are left exactly as they were.
 * **Works on any WordPress 6.0+ install.** No special PHP extensions or server changes.
 * **Open source (GPLv2).** Plugin source lives at [github.com/doable-team/agentic-seo-for-visibility](https://github.com/doable-team/agentic-seo-for-visibility).
@@ -59,7 +59,7 @@ Yes. Publishing can be turned off and Visibility can be paused for a site from V
 
 = What can a Visibility AI agent do on my WordPress site? =
 
-Through the plugin's REST surface (`/wp-json/visibility/v1/*`), agents can read your site's setup (WordPress version, SEO plugin, post types), list and read posts and pages with their SEO fields, create drafts, update content and SEO fields, add internal links, manage categories and tags, and upload images to the media library with alt text and titles. Nothing outside that: no theme or plugin files, no user accounts, no general WordPress settings.
+Through the plugin's REST surface (`/wp-json/visibility/v1/*`), agents can read your site's setup (WordPress version, SEO plugin, page builder, post types), list and read posts, pages and products with their SEO and custom fields, create drafts, change content, SEO fields and the custom fields you allow, add internal links, add and remove redirects, manage categories and tags, and upload images or fix their alt text. Every change can be rolled back. Nothing outside that: no theme or plugin files, no user accounts, no general WordPress settings.
 
 = Will this plugin slow down my WordPress site? =
 
@@ -95,7 +95,7 @@ No. Visibility sends every approved change to your site and the plugin applies i
 
 = What WordPress and PHP versions does it require? =
 
-WordPress 6.0 or newer and PHP 7.4 or newer. Tested up to WordPress 7.0.
+WordPress 6.0 or newer and PHP 7.4 or newer. Tested up to WordPress 7.1.
 
 == External services ==
 
@@ -105,18 +105,83 @@ This plugin connects your WordPress site to **Visibility**, an external service 
 
 2. **POST https://app.visibility.so/api/wordpress/plugin/heartbeat**: sent at most once per day from WP-Cron while the plugin is paired. Body includes the installed plugin version; the shared site token is sent in the `Authorization: Bearer` header. Used to refresh the "Last seen" timestamp and pick up renames and the publishing/pause switches.
 
-3. **GET https://app.visibility.so/api/wordpress/plugin/sites/{site}/inbox**: sent every 5 minutes from WP-Cron while paired, with the site token, to pick up changes that were approved in Visibility.
+3. **GET https://app.visibility.so/api/wordpress/plugin/sites/{site}/inbox**: sent every 5 minutes from WP-Cron while paired (and at the end of a request from Visibility when that check is late), with the site token, to pick up changes that were approved in Visibility.
 
 4. **POST https://app.visibility.so/api/wordpress/plugin/sites/{site}/requests/{request}/execution-result**: sent after the plugin carries out an approved change, with the site token. Body is whether it worked, its result (for example the post ID and link) or the error message.
 
 5. **POST https://app.visibility.so/api/wordpress/plugin/disconnect**: sent when you click Disconnect on the Agentic SEO → Connection screen, with the site token. Tells Visibility to remove your site from the project. Local cleanup proceeds even if Visibility is unreachable.
 
-Inbound requests from Visibility, authenticated with the shared site token, reach the plugin at `/wp-json/visibility/v1/*` and are used by your Visibility project's agents to read your content and site setup and to carry out approved changes. No content leaves your site on its own; it only travels when the Visibility project this site is paired to asks for it.
+Inbound requests from Visibility, authenticated with the shared site token (and signed with it, with a timestamp and a one-time number, so a copied request cannot be replayed), reach the plugin at `/wp-json/visibility/v1/*` and are used by your Visibility project's agents to read your content and site setup and to carry out approved changes. No content leaves your site on its own; it only travels when the Visibility project this site is paired to asks for it.
 
 Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 2.0.0 =
+Everything since 0.9.1, in one release.
+
+* **Agents read a page before they change it.** Posts, pages, other content
+  types and WooCommerce products can be listed and read with their SEO
+  fields (as stored and as the page shows them), custom fields, page builder
+  layout, images and categories, so every approval in Visibility shows
+  before and after. Visibility can also ask what the site has: SEO plugin,
+  page builder, caches, languages, redirects and your switches.
+* **Change one part of a page.** A single heading, paragraph, link or image
+  alt text can be changed on Gutenberg, classic, Elementor, Divi 4, WPBakery
+  and Beaver Builder pages, keeping every other part and setting exactly as
+  it was. Pages built with Bricks, Oxygen or Breakdance are read only; their
+  SEO, custom fields and image alt text can still be changed.
+* **SEO fields land where your site reads them.** Yoast SEO, Rank Math, All
+  in One SEO, SEOPress, The SEO Framework and Slim SEO get title,
+  description, canonical, robots and social fields (and category SEO where
+  they have it), and structured data joins their own schema once. Without
+  an SEO plugin, the Genesis, Divi and Avada themes' own SEO fields are
+  used, else the plugin prints the tags itself, never twice.
+* **Undo any change.** Every change is saved first and can be rolled back
+  from Visibility or from Agentic SEO › Activity. If someone edited the page
+  after the change, rollback is refused so their work is never lost.
+* **Redirects.** Agents can list, add and remove redirects in Redirection
+  (in a group you choose, a "Visibility" group by default), Rank Math, Safe
+  Redirect Manager, Yoast SEO Premium, All in One SEO Pro or SEOPress Pro,
+  or in the plugin's own list when you have none. A redirect that would
+  loop or that already exists is refused. When the address of a published
+  page changes, the old address redirects to the new one automatically, and
+  undoing the change removes that redirect again.
+* **Alt text in bulk.** Visibility lists the images that have no alt text
+  and can fix up to 50 at once, in the media library and inside the pages
+  that show them. The whole batch can be undone in one step.
+* **Custom fields** from Advanced Custom Fields, Meta Box, Pods, JetEngine,
+  Carbon Fields and registered post meta can be read, and changed only when
+  you allow each field in Visibility. Astra, GeneratePress, Kadence and
+  OceanWP page options too.
+* **WooCommerce:** product names, descriptions, address, image alt text and
+  SEO, and product category text and SEO. Prices, stock, SKU, tax, shipping
+  and variations are never changed.
+* **Languages:** on Polylang and WPML sites agents must say which language
+  they edit, translations are never touched, and drafts can be created as a
+  translation. On TranslatePress sites only the main language is changed;
+  translations stay in TranslatePress.
+* **The live page shows the change at once.** The changed page's cache is
+  cleared (never the whole site) on WP Super Cache, W3 Total Cache,
+  LiteSpeed Cache, WP Fastest Cache, SiteGround, Cloudflare, WP Rocket,
+  Kinsta and WP Engine.
+* **Quiet sites don't wait.** Approved changes are applied as soon as
+  Visibility sends them. The 5-minute backup check also runs whenever
+  Visibility contacts the site, so a site with no visitors never waits for
+  one. Agentic SEO › Connection shows when it last ran.
+* **Stronger connection.** Requests from Visibility are signed and can't be
+  replayed, Visibility can rotate the connection key, and you can require
+  signed requests under Agentic SEO › Connection.
+* **You stay in control.** The plugin enforces the controls you set in
+  Visibility (allowed actions, content types, locked pages, allowed fields)
+  and has a Pause all button. New content gets the author you choose.
+* Fixed: on All in One SEO sites titles and descriptions never reached the
+  page; structured data was dropped next to the big SEO plugins; editing a
+  page removed embeds, forms and scripts elsewhere on it; an approved change
+  could run twice; "Add internal links" reported success without adding any.
+* Deleting the plugin removes its connection key, settings and scheduled
+  tasks. Still needs only WordPress 6.0 and PHP 7.4.
 
 = 0.12.0 =
 * **WooCommerce:** agents can read products and product categories and

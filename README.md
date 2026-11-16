@@ -78,7 +78,8 @@ The Stable Tag line in `readme.txt` is what users actually receive — it must m
 └──────────────────┘                                  └─────────────────┘
 ```
 
-After pairing, both sides authenticate with `Authorization: Bearer <siteToken>`:
+After pairing, both sides authenticate with `Authorization: Bearer <siteToken>`. From 2.0.0 Visibility also signs every request to the plugin (signing v1, see `includes/class-visibility-auth.php`):
+`X-Visibility-Timestamp`, `X-Visibility-Nonce`, `X-Visibility-Signature: v1=hex(HMAC-SHA256(token, "v1\nMETHOD\nROUTE\nSORTED_QUERY\nTIMESTAMP\nNONCE\nsha256(body)"))`, 300 s window, each nonce once. Bearer-only keeps working until signatures are required (`/auth/rotate {requireSignature:true}` or the WP admin switch). `tests/sign.py` is a reference signer.
 - **Plugin → Visibility**: heartbeat, last-seen check-in
 - **Visibility → Plugin**: list/create/update/delete posts, taxonomy, media via `/wp-json/visibility/v1/*`
 
@@ -107,6 +108,52 @@ After pairing, both sides authenticate with `Authorization: Bearer <siteToken>`:
 All endpoints send `Cache-Control: private, no-store` so page-cache plugins (LiteSpeed, WP Rocket, Cloudflare) can't serve stale unauthenticated bodies.
 
 ## Changelog (developer notes)
+
+### 2.0.0 (not released yet)
+
+The parked "Later" items of the WordPress roadmap (doable-team/Visibility-V2#265).
+Every earlier endpoint and response shape is unchanged; new abilities are in
+`GET /capabilities` `features`: `redirects.manage`, `redirects.auto`,
+`cron.status`, `auth.signed`, `auth.rotate`, `media.bulk_alt`,
+`builder.beaver`, `builder.read`, `seo.theme`, `multilingual.translatepress`,
+`fields.carbon`.
+
+| Issue | Note |
+|---|---|
+| #292 (+ #270, #271) | `Visibility_Redirects`: one layer over the redirect plugins and a built-in store (option `visibility_redirects`, served on 404s only). `GET /redirects` items `{id, source, target, type, enabled, regex, provider, group?}`; `redirect.create {source, target, type?, group?}` → `{redirectId, source, target, type, provider, redirect, changeId, loopWarning?}`; `redirect.delete {redirectId}`; conflict / loop / source==target refused; rollback through `/changes/{id}/rollback` (custom change rows, `postId` 0). A published item whose slug changes gets a 301 (`redirectAdded` / `redirectSkipped` / `redirectRemoved`), undone with the change; the old "refused without a redirect plugin" rule is gone. `capabilities.redirectStore`; `capabilities.redirects` keeps its 0.10 shape. |
+| C-31 #387 | Redirection: group by id/name, default "Visibility" group found or created; `groups` listed. |
+| C-32 #375 | Rank Math: `\RankMath\Redirections\DB`, only while its Redirections module is on. |
+| C-33 #376 | Safe Redirect Manager: `srm_create_redirect()`, `redirect_rule` posts. |
+| C-34 #377 | Yoast SEO Premium: `WPSEO_Redirect_Manager` / `WPSEO_Redirect` (plain). |
+| C-35 #378 | AIOSEO Pro Redirection Manager: its `Models\Redirect`, `aioseo_redirects`, `server->rewrite()`. |
+| C-36 #379 | SEOPress Pro: `seopress_404` posts with `_seopress_redirections_*`. |
+| #280 | Every authenticated call runs the backup inbox check at the end of the request when it is >10 min late; `capabilities.cron` `lastTickAt`, `lastTickVia`, `systemCron`; Connection screen shows the last check; readme FAQ on a real cron job. |
+| #296 | Signing v1 + `/auth/rotate` (pending token, promoted on first use, plugin heartbeats with it); WP admin "Only accept signed requests"; `capabilities.auth`. |
+| #297 | `GET /media?missingAlt=1`; `media.bulk_alt {items:[{mediaId, altText, title?, caption?}]}` (≤50) updates the library and the `wp-image-ID` images in pages (page-specific alt kept, locked pages skipped); one change, one rollback. |
+| C-37 #380 | Beaver Builder: modules by node id through `FLBuilderModel::update_layout_data()`, asset cache cleared, post_content re-rendered; unpublished builder drafts and global modules refused. |
+| C-38–C-40 #381–#383 | Bricks, Oxygen (classic + 6), Breakdance: detected, elements read (`builder.readable`), edits refused "can only read". |
+| C-41 #384 | Genesis / Divi / Avada SEO fields when no SEO plugin (`seo.plugin` = theme, `seo.theme`, `seo.themePrints`); Visibility prints only what the theme does not. |
+| C-42 #385 | TranslatePress read-only: `language` = default, `translations` `[{language, locale, url}]`, other languages `language_unsupported`. |
+| C-43 #386 | Carbon Fields `carbon:<name>` through `carbon_get_post_meta` / `carbon_set_post_meta`. |
+
+#### What each 2.0.0 adapter was built from
+
+| Adapter | Built from | Tested against |
+|---|---|---|
+| Redirection | wordpress.org source (`Red_Item`, `Red_Group`) | real Redirection 5.10.1 — `t10-redirects.sh EXPECT=redirection` |
+| Rank Math redirections | wordpress.org source (`RankMath\Redirections\DB`, `Helper::is_module_active`) | real Rank Math — `EXPECT=rankmath` |
+| Safe Redirect Manager | wordpress.org source (`srm_create_redirect`, `redirect_rule`) | real 2.3.0 — `EXPECT=srm` |
+| Yoast SEO Premium redirects | Premium's redirect classes and `wp yoast redirect` commands (public copies), developer.yoast.com redirect option docs | stand-in `tests/standins/yoast-premium-redirects-standin.php` — `EXPECT=yoast` |
+| AIOSEO Pro redirects | the Redirection Manager add-on's public code (model, table, REST create/delete) | stand-in `aioseo-redirects-standin.php` — `EXPECT=aioseo` |
+| SEOPress Pro redirects | seopress.org redirections guide + free SEOPress's `_seopress_redirections_*` keys | stand-in `seopress-pro-redirects-standin.php` — `EXPECT=seopress` |
+| Beaver Builder | wordpress.org Beaver Builder Lite source (`FLBuilderModel`) | real Lite 2.11 — `t-beaver.sh` |
+| Bricks / Oxygen / Breakdance | their documented storage (`_bricks_page_content_2`, `ct_builder_json`, `_breakdance_data.tree_json_string`) | stand-in `readonly-builders-standin.php` (constants only) — `t-readonly-builders.sh` |
+| Divi SEO | Divi 4.21 `epanel/custom_functions.php` | real Divi 4.21 (local copy, not shipped) — `t-theme-seo.sh THEME=divi` |
+| Genesis / Avada SEO | Genesis `_genesis_*` keys; Avada `class-avada-head.php`, `Fusion_Data_PostMeta` | stand-in themes `standins/themes/` — `THEME=genesis|avada` |
+| TranslatePress | wordpress.org source (`trp_settings`, `url_converter`) | real 3.3.9 — `t-translatepress.sh` |
+| Carbon Fields | github.com/htmlburger/carbon-fields 3.6.11 | real library — `t-carbon.sh` |
+
+Plugin Check (`wp plugin check agentic-seo-visibility`): no errors or warnings.
 
 ### 0.12.0 (not released yet)
 
