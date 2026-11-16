@@ -1,16 +1,32 @@
 <?php
 /**
- * Multilingual sites (#290 shared part, #334 Polylang).
+ * Multilingual sites (#290 shared part, #334 Polylang, #340 WPML).
  *
  * - Every post reports its language and its translation group
  *   ({lang: post id}).
  * - Edits on a multilingual site must name the language of the post they
  *   change: missing → language_required, different → language_mismatch.
  *   That keeps an agent from editing the wrong language by mistake.
- * - Editing a post only ever changes that post; Polylang's own sync of
- *   taxonomies/meta between translations is left as the owner configured it.
+ * - Editing a post only ever changes that post; the multilingual plugin's own
+ *   sync of taxonomies/meta between translations is left as the owner
+ *   configured it.
  * - A new draft can be created in a language and linked to its source post as
  *   its translation.
+ *
+ * Two providers, picked by what is active:
+ *   polylang  pll_get_post_language(), pll_set_post_language(),
+ *             pll_save_post_translations(), the `lang` query var.
+ *   wpml      WPML's documented hooks only (wpml.org › WPML Hooks Reference):
+ *             wpml_active_languages, wpml_default_language,
+ *             wpml_element_language_details (trid + language),
+ *             wpml_get_element_translations (the group by trid),
+ *             wpml_object_id (a translation by language, drafts included),
+ *             wpml_is_translated_post_type, wpml_set_element_language_details
+ *             (language + link to the source), wpml_switch_language (scoped
+ *             query language, closed with null).
+ * WPML found but one of those hooks missing (an old or changed WPML): the
+ * site is reported as multilingual but not writable, and creating content in
+ * a language is refused instead of guessed.
  */
 
 if (!defined('ABSPATH')) {
@@ -24,34 +40,173 @@ class Visibility_Languages {
     'post.update_content', 'page.update_content', 'post.edit_parts', 'page.edit_parts',
     'seo_meta.update', 'fields.update', 'post.update_meta', 'internal_link.suggest',
     'post.publish', 'page.publish', 'post.schedule', 'post.unpublish', 'post.trash',
+    'product.update', 'term.update',
   ];
 
+  /** WPML hooks the adapter relies on: [type, name]. */
+  const WPML_HOOKS = [
+    ['filter', 'wpml_active_languages'],
+    ['filter', 'wpml_default_language'],
+    ['filter', 'wpml_element_language_details'],
+    ['filter', 'wpml_get_element_translations'],
+    ['filter', 'wpml_is_translated_post_type'],
+    ['filter', 'wpml_object_id'],
+    ['action', 'wpml_set_element_language_details'],
+    ['action', 'wpml_switch_language'],
+  ];
+
+  // ─── Provider ──────────────────────────────────────────────────────────
+
+  /** "polylang" | "wpml" | null: the multilingual plugin Visibility can work with. */
+  public static function provider() {
+    if (function_exists('pll_get_post_language') && function_exists('pll_languages_list') && count((array) pll_languages_list()) > 0) return 'polylang';
+    if (self::wpml_ready() && count(self::wpml_languages()) > 0) return 'wpml';
+    return null;
+  }
+
+  /** WPML is installed (it defines ICL_SITEPRESS_VERSION). */
+  public static function wpml_present() {
+    return defined('ICL_SITEPRESS_VERSION');
+  }
+
+  /** WPML is installed and every hook we use is registered. */
+  public static function wpml_ready() {
+    return self::wpml_present() && empty(self::wpml_missing_hooks());
+  }
+
+  /** Hooks from WPML_HOOKS that are not registered on this site. */
+  public static function wpml_missing_hooks() {
+    $missing = [];
+    foreach (self::WPML_HOOKS as $h) {
+      if (!has_filter($h[1])) $missing[] = $h[1];
+    }
+    return $missing;
+  }
+
+  private static function wpml_languages() {
+    $langs = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+    return is_array($langs) ? array_values(array_map('strval', array_keys($langs))) : [];
+  }
+
+  /** WPML's element type for a post type ("post_page"). */
+  private static function wpml_type($post_type) {
+    return 'post_' . $post_type;
+  }
+
+  /** {trid, language_code, source_language_code} or null. */
+  private static function wpml_details($post_id) {
+    $post = get_post((int) $post_id);
+    if (!$post) return null;
+    $d = apply_filters('wpml_element_language_details', null, ['element_id' => (int) $post->ID, 'element_type' => $post->post_type]);
+    if (!is_object($d) || empty($d->language_code)) return null;
+    return $d;
+  }
+
   public static function active() {
-    return function_exists('pll_get_post_language') && function_exists('pll_languages_list') && count((array) pll_languages_list()) > 0;
+    return self::provider() !== null;
   }
 
   public static function languages() {
-    return self::active() ? array_values((array) pll_languages_list()) : [];
+    $p = self::provider();
+    if ($p === 'polylang') return array_values((array) pll_languages_list());
+    if ($p === 'wpml') return self::wpml_languages();
+    return [];
+  }
+
+  public static function default_language() {
+    $p = self::provider();
+    if ($p === 'polylang') return function_exists('pll_default_language') ? pll_default_language() : null;
+    if ($p === 'wpml') {
+      $d = apply_filters('wpml_default_language', null);
+      return is_string($d) && $d !== '' ? $d : null;
+    }
+    return null;
   }
 
   /** Language slug of a post, or null. */
   public static function of($post_id) {
-    if (!self::active()) return null;
-    $l = pll_get_post_language((int) $post_id);
-    return $l ? (string) $l : null;
+    $p = self::provider();
+    if ($p === 'polylang') {
+      $l = pll_get_post_language((int) $post_id);
+      return $l ? (string) $l : null;
+    }
+    if ($p === 'wpml') {
+      $d = self::wpml_details($post_id);
+      return $d ? (string) $d->language_code : null;
+    }
+    return null;
   }
 
   /** {lang: post id} for the post's translation group (itself included). */
   public static function translations($post_id) {
-    if (!self::active() || !function_exists('pll_get_post_translations')) return null;
-    $t = pll_get_post_translations((int) $post_id);
-    return (object) array_map('intval', (array) $t);
+    $p = self::provider();
+    if ($p === 'polylang') {
+      if (!function_exists('pll_get_post_translations')) return null;
+      return (object) array_map('intval', (array) pll_get_post_translations((int) $post_id));
+    }
+    if ($p === 'wpml') {
+      $d = self::wpml_details($post_id);
+      if (!$d || empty($d->trid)) return null;
+      $rows = apply_filters('wpml_get_element_translations', null, (int) $d->trid, self::wpml_type(get_post_type((int) $post_id)));
+      $out = [];
+      foreach ((array) $rows as $lang => $row) {
+        $row = (object) $row;
+        if (!empty($row->element_id)) $out[(string) $lang] = (int) $row->element_id;
+      }
+      // Outside wp-admin WPML leaves out translations the (anonymous) caller
+      // can't read, such as drafts; Visibility must see them, so ask per
+      // language too (wpml_object_id, no fallback to the original).
+      $type = get_post_type((int) $post_id);
+      foreach (self::languages() as $lang) {
+        if (isset($out[$lang])) continue;
+        $id = (int) apply_filters('wpml_object_id', (int) $post_id, $type, false, $lang);
+        if ($id > 0) $out[$lang] = $id;
+      }
+      return (object) $out;
+    }
+    return null;
   }
 
-  /** Whether Polylang manages this post type. */
+  /** Whether the multilingual plugin manages this post type. */
   public static function translated_type($type) {
-    return self::active() && function_exists('pll_is_translated_post_type') && pll_is_translated_post_type($type);
+    $p = self::provider();
+    if ($p === 'polylang') return function_exists('pll_is_translated_post_type') && pll_is_translated_post_type($type);
+    if ($p === 'wpml') return (bool) apply_filters('wpml_is_translated_post_type', null, $type);
+    return false;
   }
+
+  // ─── Queries ───────────────────────────────────────────────────────────
+
+  /**
+   * Run a post list in one language ($lang) or in every language (''), then
+   * put the query language back. Returns $fn's WP_Query.
+   */
+  public static function query(array $args, $lang, $fn) {
+    $p = self::provider();
+    $lang = ($lang !== '' && in_array($lang, self::languages(), true)) ? $lang : '';
+    if ($p === 'polylang') {
+      $args['lang'] = $lang;
+      return $fn($args);
+    }
+    if ($p === 'wpml') {
+      if ($lang === '') {
+        // WPML filters queries by the current language through query
+        // filters; without them the list has every language.
+        $args['suppress_filters'] = true;
+        return $fn($args);
+      }
+      // A scope: a language opens it, null closes it (WPML 5 keeps a stack).
+      do_action('wpml_switch_language', $lang);
+      try {
+        return $fn($args);
+      } finally {
+        do_action('wpml_switch_language', null);
+      }
+    }
+    return $fn($args);
+  }
+
+  // ─── Checks ────────────────────────────────────────────────────────────
 
   /**
    * Why an edit may not run on this post, or null.
@@ -79,7 +234,8 @@ class Visibility_Languages {
   public static function check_action($action_type, $payload) {
     if (!self::active() || !in_array($action_type, self::EDIT_ACTIONS, true)) return null;
     if ($action_type === 'seo_meta.update' && !empty($payload['termId'])) return null;
-    $post_id = (int) ($payload['postId'] ?? $payload['pageId'] ?? 0);
+    if ($action_type === 'term.update') return null;
+    $post_id = (int) ($payload['postId'] ?? $payload['pageId'] ?? $payload['productId'] ?? 0);
     if (!$post_id) return null;
     return self::check_edit($post_id, $payload['language'] ?? null);
   }
@@ -90,9 +246,14 @@ class Visibility_Languages {
    * @return true|WP_Error
    */
   public static function assign($post_id, $language, $source_id = 0) {
-    if (!self::active()) return true;
     $language = is_string($language) ? sanitize_key($language) : '';
     $source_id = (int) $source_id;
+    if (!self::active()) {
+      if (($language !== '' || $source_id) && self::wpml_present()) {
+        return new WP_Error('unsupported', sprintf('WPML is active but does not offer the hooks Visibility uses (%s), so the language was not set. Set it in WordPress.', implode(', ', self::wpml_missing_hooks())));
+      }
+      return true;
+    }
     if ($language === '' && $source_id) return new WP_Error('language_required', 'translationOf needs a language.');
     if ($language === '') return true;
     if (!in_array($language, self::languages(), true)) {
@@ -101,7 +262,7 @@ class Visibility_Languages {
     if ($source_id) {
       $src = get_post($source_id);
       if (!$src) return new WP_Error('not_found', 'translationOf post not found.');
-      $group = (array) pll_get_post_translations($source_id);
+      $group = (array) self::translations($source_id);
       if (!$group && ($sl = self::of($source_id))) $group = [$sl => $source_id];
       if (isset($group[$language]) && (int) $group[$language] !== (int) $post_id) {
         return new WP_Error('conflict', sprintf('Post %d already has a %s translation (post %d).', $source_id, $language, $group[$language]));
@@ -110,25 +271,61 @@ class Visibility_Languages {
         return new WP_Error('invalid', sprintf('Post %d is already in %s.', $source_id, $language));
       }
     }
-    pll_set_post_language((int) $post_id, $language);
-    if ($source_id) {
-      $group[$language] = (int) $post_id;
-      pll_save_post_translations($group);
+    if (self::provider() === 'polylang') {
+      pll_set_post_language((int) $post_id, $language);
+      if ($source_id) {
+        $group[$language] = (int) $post_id;
+        pll_save_post_translations($group);
+      }
+      return true;
+    }
+    // WPML: language and, for a translation, the source's trid and language.
+    $src = $source_id ? self::wpml_details($source_id) : null;
+    if ($source_id && (!$src || empty($src->trid))) {
+      return new WP_Error('invalid', sprintf('Post %d has no language in WPML, so a translation cannot be linked to it.', $source_id));
+    }
+    do_action('wpml_set_element_language_details', [
+      'element_id'           => (int) $post_id,
+      'element_type'         => self::wpml_type(get_post_type((int) $post_id)),
+      'trid'                 => $src ? (int) $src->trid : false,
+      'language_code'        => $language,
+      'source_language_code' => $src ? (string) $src->language_code : null,
+    ]);
+    // Read back: refuse rather than report a language WPML didn't store.
+    if (self::of($post_id) !== $language) {
+      return new WP_Error('save_failed', sprintf('WPML did not keep language %s for the new post.', $language));
     }
     return true;
   }
 
   /** The language part of /capabilities' multilingual entry. */
   public static function describe() {
-    if (!self::active()) return null;
-    return [
-      'slug'      => 'polylang',
-      'name'      => 'Polylang',
-      'version'   => defined('POLYLANG_VERSION') ? POLYLANG_VERSION : null,
-      'languages' => self::languages(),
-      'default'   => function_exists('pll_default_language') ? pll_default_language() : null,
-      'writable'  => true,
-      'languageRequired' => true,
-    ];
+    $p = self::provider();
+    if ($p === 'polylang') {
+      return [
+        'slug'      => 'polylang',
+        'name'      => 'Polylang',
+        'version'   => defined('POLYLANG_VERSION') ? POLYLANG_VERSION : null,
+        'languages' => self::languages(),
+        'default'   => self::default_language(),
+        'writable'  => true,
+        'languageRequired' => true,
+      ];
+    }
+    if (self::wpml_present()) {
+      $ready = $p === 'wpml';
+      $out = [
+        'slug'      => 'wpml',
+        'name'      => 'WPML',
+        'version'   => (string) ICL_SITEPRESS_VERSION,
+        'languages' => $ready ? self::languages() : (has_filter('wpml_active_languages') ? self::wpml_languages() : []),
+        'default'   => $ready ? self::default_language() : null,
+        'writable'  => $ready,
+        'languageRequired' => $ready,
+      ];
+      if (!$ready) $out['note'] = sprintf('WPML is active but does not offer the hooks Visibility uses (%s); languages are read-only.', implode(', ', self::wpml_missing_hooks()) ?: 'no languages');
+      return $out;
+    }
+    return null;
   }
 }
