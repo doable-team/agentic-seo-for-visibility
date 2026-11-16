@@ -8,6 +8,7 @@
  *   redirection  Redirection (free): Red_Item / Red_Group, in a group the site
  *                picks or a "Visibility" group the plugin finds or creates.
  *   rankmath     Rank Math redirections module: \RankMath\Redirections\DB.
+ *   srm          Safe Redirect Manager: srm_create_redirect(), redirect_rule posts.
  *   visibility   the plugin's own store (option visibility_redirects), served
  *                on 404s only, so it never hides a real page.
  *
@@ -31,6 +32,7 @@ class Visibility_Redirects {
     'redirection' => ['Redirection', [301, 302, 307, 308, 410]],
     'rankmath'    => ['Rank Math redirections', [301, 302, 307, 410, 451]],
     'visibility'  => ['Visibility (built in)', [301, 302, 307, 308, 410]],
+    'srm'         => ['Safe Redirect Manager', [301, 302, 307, 410]],
   ];
 
   /** Links between a post change and the redirects it added or removed (for rollback). */
@@ -49,6 +51,7 @@ class Visibility_Redirects {
     $out = [];
     if (defined('REDIRECTION_VERSION') && class_exists('Red_Item') && class_exists('Red_Group')) $out[] = 'redirection';
     if (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB') && self::rankmath_module_on()) $out[] = 'rankmath';
+    if (function_exists('srm_create_redirect')) $out[] = 'srm';
     return $out;
   }
 
@@ -70,6 +73,7 @@ class Visibility_Redirects {
     switch ($slug) {
       case 'redirection': return defined('REDIRECTION_VERSION') ? (string) REDIRECTION_VERSION : null;
       case 'rankmath':    return defined('RANK_MATH_VERSION') ? (string) RANK_MATH_VERSION : null;
+      case 'srm':         return defined('SRM_VERSION') ? (string) SRM_VERSION : null;
       case 'visibility':  return VISIBILITY_PLUGIN_VERSION;
     }
     return null;
@@ -599,6 +603,35 @@ class Visibility_Redirects {
 
   private static function delete_rankmath($id) {
     \RankMath\Redirections\DB::delete([(int) $id]);
+    return true;
+  }
+
+  // ─── Safe Redirect Manager (C-33) ──────────────────────────────────────
+
+  private static function list_srm() {
+    $ids = get_posts(['post_type' => 'redirect_rule', 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids', 'orderby' => 'menu_order ID', 'order' => 'ASC']);
+    $out = [];
+    foreach ($ids as $id) {
+      $to = (string) get_post_meta($id, '_redirect_rule_to', true);
+      if (in_array((int) get_post_meta($id, '_redirect_rule_status_code', true), [403, 404, 410], true)) $to = '';
+      $tp = self::to_path($to);
+      $out[] = self::item('srm', $id, (string) get_post_meta($id, '_redirect_rule_from', true), $tp !== null ? $tp : $to, (int) get_post_meta($id, '_redirect_rule_status_code', true), get_post_status($id) === 'publish', (bool) get_post_meta($id, '_redirect_rule_from_regex', true));
+    }
+    return $out;
+  }
+
+  private static function create_srm($source, $target, $type, $group) {
+    // 410 needs no target, but Safe Redirect Manager refuses an empty one.
+    $id = srm_create_redirect($source, $target === '' ? '/' : $target, $type, false, 'publish', 0, 'Added by Visibility', Visibility_Author::id());
+    if (is_wp_error($id)) return new WP_Error('save_failed', 'Safe Redirect Manager: ' . $id->get_error_message());
+    $r = self::find_id('srm', $id);
+    return $r ?: new WP_Error('not_applied', 'Safe Redirect Manager did not keep the redirect.');
+  }
+
+  private static function delete_srm($id) {
+    if (get_post_type((int) $id) !== 'redirect_rule') return new WP_Error('not_found', 'redirect not found');
+    wp_delete_post((int) $id, true);
+    if (function_exists('srm_flush_cache')) srm_flush_cache();
     return true;
   }
 }
