@@ -84,13 +84,13 @@ R=$(action $S page.edit_parts "{\"postId\":$ID,\"edits\":[{\"target\":{\"path\":
 check "$(echo "$R" | jget "['ok']")" "True" "container block with find -> ok"
 grep -q 'Inner paragraph, <strong>changed</strong>.' <<<"$($WP $S post get $ID --field=post_content)" && ok "find/replace landed in the inner block" || bad "find/replace"
 
-# Slug change on published content: posts get WordPress's own 301, pages
-# without a redirect plugin are refused.
+# Slug change on published content: a 301 from the old address (2.0.0: in the
+# redirect plugin, else the plugin's own store; before 2.0.0 pages were refused).
 P=$($WP $S post create --post_status=publish --post_title="T1 slug $RANDOM" --post_name=t1-old-slug-$RANDOM --porcelain | tr -d '\r' | tail -1)
 OLD=$($WP $S post get $P --field=post_name)
 R=$(action $S post.update_content "{\"postId\":$P,\"fields\":{\"slug\":\"$OLD-new\"}}")
-check "$(echo "$R" | jget "d['result']['slugChanged']['redirect']")" "wordpress" "post slug change -> WordPress old-slug redirect"
+check "$(echo "$R" | jget "d['result']['slugChanged']['redirect'] in ('wordpress','visibility','redirection','rankmath') and 'redirectAdded' in d['result']")" "True" "post slug change -> 301 added (redirectAdded)"
 check "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:$((PORT_BASE+S))/$OLD/")" "301 http://localhost:$((PORT_BASE+S))/$OLD-new/" "old post URL 301s to the new one"
 R=$(action $S page.update_content "{\"postId\":$ID,\"fields\":{\"slug\":\"t1-moved-$RANDOM\"}}")
-check "$(echo "$R" | jget "['errorCode']")" "unsupported" "published page slug change without a redirect plugin -> refused"
+check "$(echo "$R" | jget "d['ok'] and 'redirectAdded' in d['result']")" "True" "published page slug change -> 301 added (no longer refused)"
 summary

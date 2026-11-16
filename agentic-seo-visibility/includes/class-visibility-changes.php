@@ -105,7 +105,7 @@ class Visibility_Changes {
           ?>
           <tr>
             <td><?php echo esc_html(get_date_from_gmt($row->created_at, get_option('date_format') . ' ' . get_option('time_format'))); ?></td>
-            <td><?php if (get_post($c['postId'])) : ?><a href="<?php echo esc_url(get_edit_post_link($c['postId'])); ?>"><?php echo esc_html($title !== '' ? $title : '#' . $c['postId']); ?></a><?php else : ?>#<?php echo (int) $c['postId']; ?><?php endif; ?></td>
+            <td><?php if (!$c['postId']) : ?>&mdash;<?php elseif (get_post($c['postId'])) : ?><a href="<?php echo esc_url(get_edit_post_link($c['postId'])); ?>"><?php echo esc_html($title !== '' ? $title : '#' . $c['postId']); ?></a><?php else : ?>#<?php echo (int) $c['postId']; ?><?php endif; ?></td>
             <td><code><?php echo esc_html($c['action']); ?></code></td>
             <td><?php echo esc_html(implode(', ', array_slice($c['changed'], 0, 6)) . (count($c['changed']) > 6 ? ' …' : '')); ?></td>
             <td>
@@ -239,6 +239,12 @@ class Visibility_Changes {
     if (!$after) return null;
     $changed = $created ? ['created'] : self::diff($before, $after);
     if (empty($changed)) return null;
+    // Redirects added or removed by this change (slug change), undone with it.
+    if (class_exists('Visibility_Redirects') && Visibility_Redirects::$linked) {
+      $after['linkedRedirects'] = Visibility_Redirects::$linked;
+      Visibility_Redirects::$linked = [];
+      $changed[] = 'redirects:linked';
+    }
     self::install();
     $wpdb->insert(self::table(), [
       'request_id'   => (string) (self::$request_id ?: ''),
@@ -248,6 +254,28 @@ class Visibility_Changes {
       'created_at'   => current_time('mysql', true),
       'changed'      => wp_json_encode($changed),
       'before_state' => $before === null ? null : maybe_serialize($before),
+      'after_state'  => maybe_serialize($after),
+      'rollback_of'  => $rollback_of,
+    ]);
+    return $wpdb->insert_id ? (string) $wpdb->insert_id : null;
+  }
+
+  /**
+   * A change that is not about one post (redirects, several images at once).
+   * $before / $after are ['group' => [key => value]]; $changed lists
+   * "group:key" items. Rolled back by the `visibility_rollback_custom` hook.
+   */
+  public static function record_custom($action, array $changed, array $before, array $after, $rollback_of = null) {
+    global $wpdb;
+    self::install();
+    $wpdb->insert(self::table(), [
+      'request_id'   => (string) (self::$request_id ?: ''),
+      'post_id'      => 0,
+      'action'       => substr((string) $action, 0, 64),
+      'source'       => 'action',
+      'created_at'   => current_time('mysql', true),
+      'changed'      => wp_json_encode(array_values($changed)),
+      'before_state' => maybe_serialize($before),
       'after_state'  => maybe_serialize($after),
       'rollback_of'  => $rollback_of,
     ]);
@@ -333,6 +361,7 @@ class Visibility_Changes {
     if (!$row) return new WP_Error('not_found', 'Change not found.');
     if ($row->rolled_back_at) return new WP_Error('already_rolled_back', 'This change was already rolled back.');
     $post_id = (int) $row->post_id;
+    if ($post_id === 0) return self::rollback_custom($row, $source);
     $after  = maybe_unserialize($row->after_state);
     $before = $row->before_state ? maybe_unserialize($row->before_state) : null;
     $now = self::state($post_id);
@@ -374,6 +403,23 @@ class Visibility_Changes {
     ];
   }
 
+  /** Undo a change recorded with record_custom(). */
+  private static function rollback_custom($row, $source) {
+    global $wpdb;
+    $before = $row->before_state ? maybe_unserialize($row->before_state) : [];
+    $after  = $row->after_state ? maybe_unserialize($row->after_state) : [];
+    $result = (object) ['error' => null, 'data' => null];
+    do_action('visibility_rollback_custom', $result, $row, [$before, $after]);
+    if ($result->error) return $result->error;
+    if ($result->data === null) return new WP_Error('unsupported', 'This change cannot be rolled back.');
+    $changed = json_decode($row->changed, true) ?: [];
+    $new_id = self::record_custom('change.rollback', $changed, (array) $after, (array) $before, (int) $row->id);
+    $wpdb->update(self::table(), ['rolled_back_at' => current_time('mysql', true), 'rolled_back_by' => $new_id ? (int) $new_id : null], ['id' => (int) $row->id]);
+    $out = ['postId' => 0, 'rolledBack' => (string) $row->id, 'changeId' => $new_id, 'cachePurged' => []];
+    if (is_array($result->data)) $out += $result->data;
+    return $out;
+  }
+
   /** Write the "before" value of every changed item back. */
   private static function restore($post_id, array $before, array $changed) {
     global $wpdb;
@@ -384,6 +430,7 @@ class Visibility_Changes {
       if ($group === 'post') $post_args[$key] = $before['post'][$key];
       elseif ($group === 'meta') $meta_keys[] = $key;
       elseif ($group === 'terms') $taxes[] = $key;
+      elseif ($group === 'redirects') continue;
       elseif ($group === 'seo' && is_array($before['seo']) && array_key_exists($key, $before['seo'])) $seo[$key] = $before['seo'][$key];
     }
     if (isset($post_args['post_status']) && get_post_status($post_id) === 'trash') {

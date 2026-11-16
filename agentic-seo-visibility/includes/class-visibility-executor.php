@@ -58,6 +58,7 @@ class Visibility_Executor {
       $res = self::{$method}($payload);
     } catch (\Throwable $e) {
       if ($target) Visibility_Changes::abort($target);
+      Visibility_Redirects::$linked = [];
       return [false, null, $e->getMessage()];
     }
     return self::after_write($action_type, $target, $res, $payload);
@@ -83,11 +84,13 @@ class Visibility_Executor {
     if (in_array($action_type, self::CREATE_ACTIONS, true) && $ok && is_array($result)) $post_id = (int) ($result['postId'] ?? 0);
     if (!$ok) {
       if ($target) Visibility_Changes::abort($target);
+      Visibility_Redirects::$linked = [];
       return $res;
     }
     if ($post_id && is_array($result)) {
       $change = Visibility_Changes::commit($post_id, $action_type, 'action', in_array($action_type, self::CREATE_ACTIONS, true));
       $result['changeId'] = $change;
+      Visibility_Redirects::$linked = [];
       if (isset($result['modifiedGmt'])) $result['modifiedGmt'] = Visibility_Content::modified_gmt($post_id);
     }
     // Clear the changed page's cache so the live page shows the change.
@@ -256,34 +259,35 @@ class Visibility_Executor {
   }
 
   /**
-   * A published post whose slug changed: WordPress keeps the old slug and
-   * 301-redirects it to the new address (wp_old_slug_redirect). Say so.
+   * A published post whose address changed: a 301 from the old address to the
+   * new one is added in the redirect plugin (or the plugin's own store) and
+   * reported as redirectAdded / redirectSkipped (#292). Posts also keep
+   * WordPress's own old-slug redirect.
    */
   public static function slug_note($before, $old_slug, $old_url) {
     $now = get_post($before->ID);
-    if (!$now || $old_slug === '' || $now->post_name === $old_slug || $before->post_status !== 'publish') return [];
-    if (!is_post_type_hierarchical($now->post_type)) {
-      $old = get_post_meta($before->ID, '_wp_old_slug');
-      return ['slugChanged' => ['from' => $old_slug, 'to' => $now->post_name, 'redirect' => in_array($old_slug, (array) $old, true) ? 'wordpress' : null]];
+    if (!$now || $old_slug === '' || $now->post_name === $old_slug) return [];
+    if ($before->post_status !== 'publish') {
+      return ['redirectSkipped' => 'The page was not published, so its old address had no visitors to redirect.'];
     }
-    // Pages: WordPress keeps no old slug, so add a 301 in the redirect plugin.
-    $from = wp_parse_url($old_url, PHP_URL_PATH);
-    $to = wp_parse_url(get_permalink($now), PHP_URL_PATH);
-    $r = self::exec_redirect_create(['fromPath' => $from, 'toPath' => $to, 'type' => 301]);
-    return ['slugChanged' => ['from' => $old_slug, 'to' => $now->post_name, 'redirect' => $r[0] ? $r[1]['plugin'] : null, 'redirectError' => $r[0] ? null : $r[2]]];
+    $note = ['from' => $old_slug, 'to' => $now->post_name, 'redirect' => null];
+    $auto = Visibility_Redirects::auto($old_url, get_permalink($now));
+    if (isset($auto['redirectAdded'])) {
+      $note['redirect'] = $auto['redirectAdded']['provider'];
+    } elseif (!is_post_type_hierarchical($now->post_type) && in_array($old_slug, (array) get_post_meta($before->ID, '_wp_old_slug'), true)) {
+      $note['redirect'] = 'wordpress';
+    }
+    if (isset($auto['redirectSkipped']) && $note['redirect'] === null) $note['redirectError'] = $auto['redirectSkipped'];
+    return ['slugChanged' => $note] + $auto;
   }
 
   /**
-   * A published hierarchical post (page) whose slug changes needs a redirect
-   * plugin for the old address; without one the change is refused.
+   * Kept for 0.10.0 callers. Since 2.0.0 the plugin keeps its own redirects
+   * when no redirect plugin is installed, so a slug change is never refused.
    * @return string|null why it is refused
    */
   public static function slug_guard($post, $args) {
-    if (!isset($args['post_name']) || $args['post_name'] === $post->post_name) return null;
-    if ($post->post_status !== 'publish' || !is_post_type_hierarchical($post->post_type)) return null;
-    $plugin = self::detect_redirect_plugin();
-    if ($plugin === 'redirection' || $plugin === 'rankmath') return null;
-    return 'Changing the address of a published page would break links to it, and there is no redirect plugin (Redirection or Rank Math) to send the old address to the new one. Install one, or keep the slug.';
+    return null;
   }
 
   /**
@@ -683,71 +687,18 @@ class Visibility_Executor {
     return $want === (string) $stored;
   }
 
-  // ─── Redirects ─────────────────────────────────────────────────────────
-
-  private static function detect_redirect_plugin() {
-    if (defined('REDIRECTION_VERSION'))            return 'redirection';
-    if (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB')) return 'rankmath';
-    if (defined('WPSEO_VERSION') && file_exists(WP_PLUGIN_DIR . '/wordpress-seo-premium/wpseo-premium.php')) return 'yoast_premium';
-    return null;
-  }
+  // ─── Redirects (#292) ──────────────────────────────────────────────────
 
   private static function exec_redirect_create($payload) {
-    $plugin = self::detect_redirect_plugin();
-    if (!$plugin) {
-      return [false, null, 'No redirect plugin installed (Redirection / Rank Math / Yoast Premium).'];
-    }
-    if ($plugin === 'rankmath') {
-      // Rank Math: insert via its DB class.
-      try {
-        $id = \RankMath\Redirections\DB::add([
-          'sources'      => [['pattern' => (string) $payload['fromPath'], 'comparison' => 'exact']],
-          'url_to'       => (string) $payload['toPath'],
-          'header_code'  => intval($payload['type'] ?? 301),
-          'status'       => 'active',
-        ]);
-        return [true, ['redirectId' => (int) $id, 'plugin' => 'rankmath'], null];
-      } catch (\Throwable $e) {
-        return [false, null, $e->getMessage()];
-      }
-    }
-    if ($plugin === 'redirection') {
-      // Redirection plugin: hook into its REST surface via internal call.
-      if (!class_exists('Red_Item')) {
-        return [false, null, 'Redirection plugin classes not available.'];
-      }
-      $item = \Red_Item::create([
-        'url'        => (string) $payload['fromPath'],
-        'action_data'=> ['url' => (string) $payload['toPath']],
-        'group_id'   => 1,
-        'match_type' => 'url',
-        'action_type'=> 'url',
-        'action_code'=> intval($payload['type'] ?? 301),
-      ]);
-      if (is_wp_error($item)) return [false, null, $item->get_error_message()];
-      return [true, ['redirectId' => is_object($item) ? $item->get_id() : null, 'plugin' => 'redirection'], null];
-    }
-    return [false, null, 'Yoast Premium redirect API not implemented in this build.'];
+    $r = Visibility_Redirects::action_create($payload);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    return [true, $r, null];
   }
 
   private static function exec_redirect_delete($payload) {
-    $plugin = self::detect_redirect_plugin();
-    if (!$plugin) {
-      return [false, null, 'No redirect plugin installed.'];
-    }
-    $id = $payload['redirectId'] ?? null;
-    if ($id === null) return [false, null, 'redirectId required'];
-    if ($plugin === 'rankmath' && class_exists('RankMath\\Redirections\\DB')) {
-      $deleted = \RankMath\Redirections\DB::delete([(int) $id]);
-      return [true, ['redirectId' => $id, 'deleted' => (bool) $deleted], null];
-    }
-    if ($plugin === 'redirection' && class_exists('Red_Item')) {
-      $item = \Red_Item::get_by_id((int) $id);
-      if (!$item) return [false, null, 'redirect not found'];
-      $item->delete();
-      return [true, ['redirectId' => $id, 'deleted' => true], null];
-    }
-    return [false, null, 'Delete not implemented for ' . $plugin];
+    $r = Visibility_Redirects::action_delete($payload);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    return [true, $r, null];
   }
 
   // ─── Custom fields (#288) ──────────────────────────────────────────────
@@ -792,8 +743,15 @@ class Visibility_Executor {
     $term_id = intval($payload['termId'] ?? 0);
     if (!$term_id) return self::fail('invalid', 'termId required');
     $fields = isset($payload['fields']) && is_array($payload['fields']) ? $payload['fields'] : [];
+    $old = get_term($term_id);
+    $old_link = ($old && !is_wp_error($old)) ? get_term_link($old) : '';
     $r = Visibility_WooCommerce::update_term($term_id, $payload['taxonomy'] ?? '', $fields);
     if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    if (is_string($old_link) && $old_link !== '' && is_string($r['link']) && $old->slug !== get_term($term_id)->slug) {
+      $r += Visibility_Redirects::auto($old_link, $r['link']);
+      // A term has no change snapshot, so its redirect is reported but not linked to a rollback.
+      Visibility_Redirects::$linked = [];
+    }
     return [true, $r, null];
   }
 

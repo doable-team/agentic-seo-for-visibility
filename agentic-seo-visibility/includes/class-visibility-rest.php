@@ -154,6 +154,13 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate_write'],
     ]);
 
+    // Redirects (#292): every rule of the redirect plugin and the built-in store.
+    register_rest_route('visibility/v1', '/redirects', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'list_redirects'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // Categories
     register_rest_route('visibility/v1', '/categories', [
       [
@@ -455,11 +462,13 @@ class Visibility_REST {
     }
     $this->apply_term_assignments($id, $params);
     $this->apply_featured_media($id, $params);
+    // Before the commit, so a redirect added for the old address is undone with the change.
+    $slug = Visibility_Executor::slug_note($existing, $old_slug, $old_url);
     $change = Visibility_Changes::commit($id, 'rest.update', 'rest');
     $out = $this->serialize_post_full($id);
     $out['changeId'] = $change;
     $out['cachePurged'] = Visibility_Cache::purge($id);
-    $out += Visibility_Executor::slug_note($existing, $old_slug, $old_url);
+    $out += $slug;
     return rest_ensure_response($out);
   }
 
@@ -622,6 +631,18 @@ class Visibility_REST {
       return new WP_Error('visibility_' . $code, $r->get_error_message(), $data);
     }
     return rest_ensure_response(['ok' => true] + $r);
+  }
+
+  // ── Redirects (#292) ───────────────────────────────────────────────
+
+  /** GET /redirects?source=/old-path&search=&page=&per_page= */
+  public function list_redirects(WP_REST_Request $request) {
+    return rest_ensure_response(Visibility_Redirects::query(
+      (string) ($request->get_param('source') ?? ''),
+      (string) ($request->get_param('search') ?? ''),
+      (int) ($request->get_param('page') ?? 1),
+      (int) ($request->get_param('per_page') ?? 50)
+    ));
   }
 
   // ── Terms (categories + tags) ──────────────────────────────────────

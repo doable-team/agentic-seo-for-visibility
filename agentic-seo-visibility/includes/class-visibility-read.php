@@ -221,9 +221,7 @@ class Visibility_Read {
 
     $custom_fields = Visibility_Fields::sources();
 
-    $redirects = null;
-    if (defined('REDIRECTION_VERSION')) $redirects = ['slug' => 'redirection', 'name' => 'Redirection', 'version' => REDIRECTION_VERSION];
-    elseif (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB')) $redirects = ['slug' => 'rankmath', 'name' => 'Rank Math redirections', 'version' => RANK_MATH_VERSION];
+    $redirects = Visibility_Redirects::describe_legacy();
 
     $caches = [];
     $cache_defs = [
@@ -288,6 +286,7 @@ class Visibility_Read {
       'builders'      => $builders,
       'customFields'  => $custom_fields,
       'redirects'     => $redirects,
+      'redirectStore' => Visibility_Redirects::describe(),
       'defaultAuthor' => Visibility_Author::describe(),
       'caches'        => $caches,
       'cachePurge'    => Visibility_Cache::active(),
@@ -305,7 +304,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ],
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto'],
     ];
   }
 }
