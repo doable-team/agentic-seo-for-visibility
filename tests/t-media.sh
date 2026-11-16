@@ -29,7 +29,7 @@ check "$($WP $S post list --post_type=attachment --post_parent=$P --format=count
 # Lookup by id.
 check "$(api $S GET "/media?id=$ID" | jget "['items'][0]['id']")" "$ID" "GET /media?id="
 # Not an image.
-CODE=$(curl -s -o /tmp/m.json -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' --data '{"source_url":"http://localhost/wp-login.php"}' http://localhost:$((8180+S))/wp-json/visibility/v1/media)
+CODE=$(curl -s -o /tmp/m.json -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' --data '{"source_url":"http://localhost/wp-login.php"}' http://localhost:$((PORT_BASE+S))/wp-json/visibility/v1/media)
 check "$CODE" "400" "non-image refused"
 check "$(jget "['code']" < /tmp/m.json)" "visibility_not_an_image" "error code visibility_not_an_image"
 # Executor action shares the code path.

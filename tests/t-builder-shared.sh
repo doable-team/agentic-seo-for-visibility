@@ -9,7 +9,7 @@ S=${SITE:-6}
 P=$($WP $S post create --post_type=page --post_status=publish --post_title="T286 builder $RANDOM" --post_content='<p>fallback</p>' --porcelain | tr -d '\r' | tail -1)
 $WP $S post meta update $P _elementor_edit_mode builder >/dev/null
 $WP $S post meta update $P _elementor_data '[{"id":"aa11","elType":"widget","widgetType":"heading","settings":{"title":"Hi"}}]' >/dev/null
-docker exec viswp-$S rm -f /var/www/html/wp-content/mu-plugins/vis-test-builder.php
+$CTR exec ${CPFX}$S rm -f /var/www/html/wp-content/mu-plugins/vis-test-builder.php
 R=$(api $S GET "/posts/$P?include=blocks,builder")
 check "$(echo "$R" | jget "d['editor']")" "builder:elementor" "editor = builder:elementor"
 W=$(echo "$R" | jget "d['builder']['writable']")

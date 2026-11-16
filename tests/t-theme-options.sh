@@ -5,7 +5,7 @@
 # option is written, shows on the front end, and rollback restores it.
 # THEMES="astra generatepress kadence oceanwp" on site 11 (only the themes installed).
 cd "$(dirname "$0")"; . ./lib.sh
-S=${SITE:-11}; U="http://localhost:$((8180+S))"
+S=${SITE:-11}; U="http://localhost:$((PORT_BASE+S))"
 code() { echo "$1" | jget "d.get('errorCode')"; }
 # theme  meta key  value  front-end check (grep -E on the page, must match after the write)
 declare -A KEY VAL SEE

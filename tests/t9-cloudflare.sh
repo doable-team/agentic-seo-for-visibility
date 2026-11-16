@@ -9,7 +9,7 @@
 cd "$(dirname "$0")"; . ./lib.sh
 S=${SITE:-17}; PORT=3997; STATE=$(mktemp)
 python3 cf-mock.py $PORT "$STATE" & MOCK=$!; trap 'kill $MOCK; $WP $S option delete vis_cf_mock >/dev/null' EXIT; sleep 1
-docker cp -q /home/tulasinath/viswp/mu/vis-cloudflare-mock.php viswp-$S:/var/www/html/wp-content/mu-plugins/
+$CTR cp /home/tulasinath/viswp/mu/vis-cloudflare-mock.php ${CPFX}$S:/var/www/html/wp-content/mu-plugins/
 $WP $S option update vis_cf_mock "http://host.docker.internal:$PORT/client/v4/" >/dev/null
 calls() { python3 -c "import json;print(json.dumps([c for c in json.load(open('$STATE')).get('calls',[]) if '$1' in c['path']]))"; }
 reset() { echo '{}' > "$STATE"; }

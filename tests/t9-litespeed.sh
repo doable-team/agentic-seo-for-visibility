@@ -4,7 +4,7 @@
 # this checks the header the plugin sends: tagged for the changed post
 # (Po.<id>), never a purge of everything ("*"), and cachePurged lists it.
 cd "$(dirname "$0")"; . ./lib.sh
-S=${SITE:-14}; U="http://localhost:$((8180+S))"
+S=${SITE:-14}; U="http://localhost:$((PORT_BASE+S))"
 $WP $S option update litespeed.conf.cache 1 >/dev/null 2>&1
 A=$($WP $S post create --post_type=page --post_status=publish --post_title="T9 LS A $RANDOM" --post_content="<!-- wp:paragraph --><p>A one</p><!-- /wp:paragraph -->" --porcelain | tr -d '\r' | tail -1)
 B=$($WP $S post create --post_type=page --post_status=publish --post_title="T9 LS B $RANDOM" --porcelain | tr -d '\r' | tail -1)

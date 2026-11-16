@@ -5,7 +5,7 @@
 # SITE=N CACHE="<name as in cachePurged>"; the cache plugin must be active
 # and caching for anonymous visitors.
 cd "$(dirname "$0")"; . ./lib.sh
-S=${SITE:?SITE}; NAME=${CACHE:?CACHE}; U="http://localhost:$((8180+S))"
+S=${SITE:?SITE}; NAME=${CACHE:?CACHE}; U="http://localhost:$((PORT_BASE+S))"
 mk() { $WP $S post create --post_type=page --post_status=publish --post_title="$1" --post_content="<!-- wp:paragraph --><p>$2</p><!-- /wp:paragraph -->" --porcelain | tr -d '\r' | tail -1; }
 # B is created first with a page in between: some caches also clear the
 # changed page's previous/next neighbours and the home page, as they do on

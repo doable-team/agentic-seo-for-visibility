@@ -1,7 +1,10 @@
 #!/bin/bash
 # Shared helpers for the end-to-end checks against the Docker test sites.
 # Site N: http://localhost:(8180+N), token vis-test-token-N (see tests/README.md).
-WP=/home/tulasinath/viswp/wp.sh
+# WP, PORT_BASE and CTR can be set for another set of sites (e.g. podman, 8280+N).
+WP=${WP:-/home/tulasinath/viswp/wp.sh}
+PORT_BASE=${PORT_BASE:-8180}
+CTR=${CTR:-docker}; CPFX=${CPFX:-viswp-}
 pass=0; fail=0
 ok()   { echo "PASS  $*"; pass=$((pass+1)); }
 bad()  { echo "FAIL  $*"; fail=$((fail+1)); }
@@ -9,9 +12,9 @@ check(){ if [ "$1" = "$2" ]; then ok "$3"; else bad "$3 (expected [$2], got [$1]
 api()  { # api <site> <METHOD> <path> [json]
   local n=$1 m=$2 p=$3 d=$4
   if [ -n "$d" ]; then
-    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" -H 'Content-Type: application/json' --data "$d" "http://localhost:$((8180+n))/wp-json/visibility/v1$p"
+    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" -H 'Content-Type: application/json' --data "$d" "http://localhost:$((PORT_BASE+n))/wp-json/visibility/v1$p"
   else
-    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" "http://localhost:$((8180+n))/wp-json/visibility/v1$p"
+    curl -s -X "$m" -H "Authorization: Bearer vis-test-token-$n" "http://localhost:$((PORT_BASE+n))/wp-json/visibility/v1$p"
   fi
 }
 action() { # action <site> <actionType> <payload-json> [requestId]

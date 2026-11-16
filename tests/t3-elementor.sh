@@ -5,7 +5,7 @@
 # Site 6: Astra + Elementor + Rank Math. Builds its page through Elementor's
 # own Document::save as admin.
 cd "$(dirname "$0")"; . ./lib.sh
-S=${SITE:-6}; U="http://localhost:$((8180+S))"
+S=${SITE:-6}; U="http://localhost:$((PORT_BASE+S))"
 IMG=$(api $S POST /media '{"source_url":"http://localhost/vis-test-og.png","title":"elementor hero","alt_text":"old elementor alt"}' | jget "['id']")
 ID=$($WP $S eval-file - <<EOF | tr -d '\r' | tail -1
 <?php
@@ -25,7 +25,7 @@ EOF
 CONTENT0=$($WP $S post get $ID --field=post_content)
 CSS="/var/www/html/wp-content/uploads/elementor/css/post-$ID.css"
 for i in 1 2 3; do curl -sL -o /dev/null "$U/?page_id=$ID"; docker exec viswp-$S test -f $CSS && break; sleep 1; done
-docker exec viswp-$S test -f $CSS && ok "Elementor CSS file exists before the edit" || bad "no CSS file before"
+$CTR exec ${CPFX}$S test -f $CSS && ok "Elementor CSS file exists before the edit" || bad "no CSS file before"
 CSS_T0=$(docker exec viswp-$S stat -c %Y $CSS 2>/dev/null)
 
 R=$(api $S GET "/posts/$ID?include=blocks,builder")

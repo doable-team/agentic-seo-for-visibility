@@ -23,7 +23,7 @@ for S in ${SITES:-1 2 4}; do
   check "$(echo "$R" | jget "['ok']")" "True" "rollback ok"
   check "$($WP $S post get $ID --field=post_content)" "$C" "content restored byte-identical"
   check "$(api $S GET "/changes/$CH" | jget "d['rolledBackAt'] is not None")" "True" "change marked rolled back"
-  check "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" http://localhost:$((8180+S))/wp-json/visibility/v1/changes/$CH/rollback)" "409" "second rollback refused"
+  check "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" http://localhost:$((PORT_BASE+S))/wp-json/visibility/v1/changes/$CH/rollback)" "409" "second rollback refused"
 
   # 2. SEO + title change in two requests; roll back the SEO one.
   R=$(action $S seo_meta.update "{\"postId\":$ID,\"fields\":{\"metaTitle\":\"Agent SEO title\",\"metaDescription\":\"Agent description\"}}")
@@ -32,7 +32,7 @@ for S in ${SITES:-1 2 4}; do
   R=$(action $S change.rollback "{\"changeId\":$CH2}")
   check "$(echo "$R" | jget "['ok']")" "True" "change.rollback action ok"
   check "$(api $S GET "/posts/$ID" | jget "list((d['seo']['values']['metaTitle'], d['seo']['values']['metaDescription']))")" "$SEO0" "SEO values restored"
-  PAGE=$(curl -sL "http://localhost:$((8180+S))/?page_id=$ID")
+  PAGE=$(curl -sL "http://localhost:$((PORT_BASE+S))/?page_id=$ID")
   grep -q 'Original description' <<<"$PAGE" && ok "front end shows the restored description" || bad "front end description not restored"
   grep -q 'Agent description' <<<"$PAGE" && bad "old agent description still on page" || ok "agent description gone from page"
 
@@ -43,7 +43,7 @@ for S in ${SITES:-1 2 4}; do
   $WP $S post update $ID --post_content='<!-- wp:paragraph -->
 <p>Owner edit.</p>
 <!-- /wp:paragraph -->' >/dev/null
-  CODE=$(curl -s -o /tmp/rb.json -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" http://localhost:$((8180+S))/wp-json/visibility/v1/changes/$CH3/rollback)
+  CODE=$(curl -s -o /tmp/rb.json -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" http://localhost:$((PORT_BASE+S))/wp-json/visibility/v1/changes/$CH3/rollback)
   check "$CODE" "409" "rollback after a manual edit -> 409"
   check "$(jget "['code']" </tmp/rb.json)" "visibility_conflict" "code visibility_conflict"
   check "$($WP $S post get $ID --field=post_title)" "T14 agent title" "title untouched by the refused rollback"
@@ -61,6 +61,6 @@ for S in ${SITES:-1 2 4}; do
   P5=$($WP $S post create --post_type=page --post_status=publish --post_title="T14 later $RANDOM" --post_content='<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->' --porcelain | tr -d '\r' | tail -1)
   CH5=$(action $S seo_meta.update "{\"postId\":$P5,\"fields\":{\"metaDescription\":\"first\"}}" | jget "d['result']['changeId']")
   action $S page.edit_parts "{\"postId\":$P5,\"edits\":[{\"target\":{\"path\":\"0\"},\"op\":\"replace_text\",\"text\":\"later\"}]}" >/dev/null
-  check "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" http://localhost:$((8180+S))/wp-json/visibility/v1/changes/$CH5/rollback)" "409" "rollback refused after a later change to other parts of the post"
+  check "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" http://localhost:$((PORT_BASE+S))/wp-json/visibility/v1/changes/$CH5/rollback)" "409" "rollback refused after a later change to other parts of the post"
 done
 summary

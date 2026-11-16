@@ -5,7 +5,7 @@
 # Uses site 7's fixture (registered meta `vis_subtitle` on pages).
 cd "$(dirname "$0")"; . ./lib.sh
 S=${SITE:-7}
-docker cp -q /home/tulasinath/viswp/mu/vis-fields-fixture.php viswp-$S:/var/www/html/wp-content/mu-plugins/
+$CTR cp /home/tulasinath/viswp/mu/vis-fields-fixture.php ${CPFX}$S:/var/www/html/wp-content/mu-plugins/
 code() { echo "$1" | jget "d.get('errorCode')"; }
 P=$($WP $S post create --post_type=page --post_status=publish --post_title="T288 $RANDOM" --porcelain | tr -d '\r' | tail -1)
 $WP $S post meta update $P vis_subtitle "Old subtitle" >/dev/null
@@ -13,7 +13,7 @@ api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
 
 F=$(api $S GET "/fields/schema?type=page" | jget "list(f for f in d['fields'] if f['key']=='meta:vis_subtitle')[0]")
 check "$(echo "$F" | python3 -c "import sys,ast; f=ast.literal_eval(sys.stdin.read()); print(f['label'],f['type'],f['source'],f['writable'])")" "Subtitle string meta False" "schema: registered meta listed with label/type, not writable without allowlist"
-check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:$((8180+S))/wp-json/visibility/v1/fields/schema?type=nav_menu_item")" "400" "schema: non-public type -> 400"
+check "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer vis-test-token-$S" "http://localhost:$((PORT_BASE+S))/wp-json/visibility/v1/fields/schema?type=nav_menu_item")" "400" "schema: non-public type -> 400"
 R=$(action $S fields.update "{\"postId\":$P,\"fields\":{\"meta:vis_subtitle\":\"x\"}}")
 check "$(code "$R")" "not_allowed" "no controls: field write refused"
 

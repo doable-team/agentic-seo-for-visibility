@@ -13,13 +13,13 @@ check "$(author $P1)" "$ADMIN" "draft from an agent: author = site admin"
 P2=$(api $S POST /posts '{"title":"T275 rest","type":"page"}' | jget "['id']")
 check "$(author $P2)" "$ADMIN" "POST /posts page: author = site admin"
 check "$(api $S GET /capabilities | jget "d['defaultAuthor']['id']")" "$ADMIN" "capabilities.defaultAuthor = admin"
-PAGE=$(curl -sL "http://localhost:$((8180+S))/?p=$P1&preview=true" -o /dev/null; api $S GET "/posts/$P1" | jget "d['author']['name']")
+PAGE=$(curl -sL "http://localhost:$((PORT_BASE+S))/?p=$P1&preview=true" -o /dev/null; api $S GET "/posts/$P1" | jget "d['author']['name']")
 check "$PAGE" "admin" "read: author name shown"
 
 # Pick an editor through the settings form (logged in as admin).
 ED=$($WP $S user get t275editor --field=ID 2>/dev/null || $WP $S user create t275editor t275editor@example.com --role=editor --display_name="Ed Itor" --porcelain)
 ED=$(echo "$ED" | tr -d '\r' | tail -1)
-CJ=$(mktemp); U="http://localhost:$((8180+S))"
+CJ=$(mktemp); U="http://localhost:$((PORT_BASE+S))"
 curl -s -c $CJ -b $CJ -o /dev/null $U/wp-login.php
 curl -s -c $CJ -b $CJ -b 'wordpress_test_cookie=WP+Cookie+check' -o /dev/null -d 'log=admin&pwd=admin&wp-submit=Log+In&testcookie=1' $U/wp-login.php
 H=$(curl -s -b $CJ "$U/wp-admin/admin.php?page=visibility")

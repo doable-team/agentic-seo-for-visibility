@@ -58,7 +58,7 @@ EXP2=${EXP/'<!-- wp:heading {"className":"hero-title"} -->
 EXP2=${EXP2/alt=\"old alt\"/alt=\"A clear chart of rankings\"}
 EXP2=${EXP2/example.com\/a\"/example.com\/b\"}
 check "$($WP $S post get $ID --field=post_content)" "$EXP2" "heading level/text, alt, href changed; rest identical"
-PAGE=$(curl -sL "http://localhost:$((8180+S))/?page_id=$ID")
+PAGE=$(curl -sL "http://localhost:$((PORT_BASE+S))/?page_id=$ID")
 grep -q '<h3 class="wp-block-heading hero-title" id="intro">New heading</h3>' <<<"$PAGE" && ok "front end shows new h3" || bad "front end heading"
 grep -q 'alt="A clear chart of rankings"' <<<"$PAGE" && ok "front end alt" || bad "front end alt"
 grep -q 'youtube.com/embed/abc123' <<<"$PAGE" && ok "custom HTML embed still on page" || bad "embed missing"
@@ -90,7 +90,7 @@ P=$($WP $S post create --post_status=publish --post_title="T1 slug $RANDOM" --po
 OLD=$($WP $S post get $P --field=post_name)
 R=$(action $S post.update_content "{\"postId\":$P,\"fields\":{\"slug\":\"$OLD-new\"}}")
 check "$(echo "$R" | jget "d['result']['slugChanged']['redirect']")" "wordpress" "post slug change -> WordPress old-slug redirect"
-check "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:$((8180+S))/$OLD/")" "301 http://localhost:$((8180+S))/$OLD-new/" "old post URL 301s to the new one"
+check "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:$((PORT_BASE+S))/$OLD/")" "301 http://localhost:$((PORT_BASE+S))/$OLD-new/" "old post URL 301s to the new one"
 R=$(action $S page.update_content "{\"postId\":$ID,\"fields\":{\"slug\":\"t1-moved-$RANDOM\"}}")
 check "$(echo "$R" | jget "['errorCode']")" "unsupported" "published page slug change without a redirect plugin -> refused"
 summary
