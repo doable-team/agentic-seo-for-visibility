@@ -63,6 +63,7 @@ class Visibility_Policy {
     'term.update'           => 'edit_meta',
     'media.upload_from_url' => 'images',
     'media.update_meta'     => 'images',
+    'media.bulk_alt'        => 'images',
     'redirect.create'       => 'redirects',
     'redirect.delete'       => 'redirects',
     'post.publish'          => 'publish',
@@ -245,6 +246,8 @@ class Visibility_Policy {
     if ($action_type === 'page.create_draft') $type = 'page';
     if (strpos($action_type, 'media.') === 0) {
       if ($action_type !== 'media.upload_from_url') $post_id = (int) ($payload['mediaId'] ?? 0);
+      // Bulk alt: each image and page is checked by the action itself.
+      if ($action_type === 'media.bulk_alt') $post_id = 0;
       // An image for a draft Visibility is still building is part of the draft.
       if ($action_type === 'media.upload_from_url' && self::is_visibility_draft($post_id)) $needed = ['create_drafts'];
     }

@@ -710,6 +710,10 @@ class Visibility_REST {
 
   /** GET /media?search=&page=&per_page=, or ?id=12,13 to fetch by id (for re-use). */
   public function list_media(WP_REST_Request $request) {
+    // Images without alt text (#297), with where each is used.
+    if (filter_var($request->get_param('missingAlt'), FILTER_VALIDATE_BOOLEAN)) {
+      return rest_ensure_response(Visibility_Media::missing_alt((int) ($request->get_param('page') ?? 1), (int) ($request->get_param('per_page') ?? 20)));
+    }
     $ids = $request->get_param('id');
     if ($ids !== null && $ids !== '') {
       $ids = array_values(array_filter(array_map('intval', explode(',', (string) $ids))));

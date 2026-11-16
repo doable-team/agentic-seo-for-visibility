@@ -67,7 +67,7 @@ class Visibility_Executor {
   /** Actions that create a post (snapshot after, rollback = trash). */
   const CREATE_ACTIONS = ['post.create_draft', 'page.create_draft'];
   /** Actions that cannot be undone from a snapshot. */
-  const NO_SNAPSHOT = ['post.delete_permanent', 'media.delete', 'media.upload_from_url', 'change.rollback', 'redirect.create', 'redirect.delete', 'category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'term.update'];
+  const NO_SNAPSHOT = ['post.delete_permanent', 'media.delete', 'media.upload_from_url', 'media.bulk_alt', 'change.rollback', 'redirect.create', 'redirect.delete', 'category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'term.update'];
 
   /** The post (or attachment) an action writes to, for the snapshot. */
   private static function target_post($action_type, $payload) {
@@ -104,6 +104,7 @@ class Visibility_Executor {
 
   /** Which post's cache an action affects (0 = none). */
   private static function purge_target($action_type, $post_id, $payload, $result) {
+    if ($action_type === 'media.bulk_alt') return 0; // purged per page by the action
     if (strpos($action_type, 'media.') === 0) {
       $media = (int) ($payload['mediaId'] ?? ($result['mediaId'] ?? 0));
       $parent = $media ? (int) wp_get_post_parent_id($media) : 0;
@@ -135,6 +136,7 @@ class Visibility_Executor {
       'media.upload_from_url'  => 'exec_media_upload_from_url',
       'media.update_meta'      => 'exec_media_update_meta',
       'media.delete'           => 'exec_media_delete',
+      'media.bulk_alt'         => 'exec_media_bulk_alt',
       'category.create'        => 'exec_category_create',
       'category.update'        => 'exec_category_update',
       'category.delete'        => 'exec_category_delete',
@@ -499,6 +501,17 @@ class Visibility_Executor {
       wp_update_post($update, true);
     }
     return [true, ['mediaId' => $id], null];
+  }
+
+  /** {items:[{mediaId, altText, title?, caption?}]} (#297) */
+  private static function exec_media_bulk_alt($payload) {
+    $r = Visibility_Media::bulk_alt(isset($payload['items']) ? $payload['items'] : null);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    if (empty($r['updated'])) {
+      self::$last_error_code = 'not_applied';
+      return [false, $r, 'No image was updated: ' . implode('; ', array_map(function ($f) { return $f['mediaId'] . ' (' . $f['reason'] . ')'; }, $r['failed']))];
+    }
+    return [true, $r, null];
   }
 
   private static function exec_media_delete($payload) {

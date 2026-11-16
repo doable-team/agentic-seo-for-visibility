@@ -130,4 +130,184 @@ class Visibility_Media {
     if ($reused !== null) $out['reused'] = (bool) $reused;
     return $out;
   }
+
+  // ─── Alt text in bulk (#297) ───────────────────────────────────────────
+
+  const BULK_MAX = 50;
+
+  /** GET /media?missingAlt=1: images without alt text, newest first. */
+  public static function missing_alt($page, $per) {
+    $per = max(1, min(100, (int) $per));
+    $page = max(1, (int) $page);
+    $q = new WP_Query([
+      'post_type'      => 'attachment',
+      'post_status'    => 'inherit',
+      'post_mime_type' => 'image',
+      'posts_per_page' => $per,
+      'paged'          => $page,
+      'orderby'        => 'date',
+      'order'          => 'DESC',
+      // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+      'meta_query'     => ['relation' => 'OR',
+        ['key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS'],
+        ['key' => '_wp_attachment_image_alt', 'value' => '', 'compare' => '='],
+      ],
+    ]);
+    $items = [];
+    foreach ($q->posts as $p) {
+      $m = self::serialize($p->ID);
+      $m['usedIn'] = self::used_in($p->ID, 5);
+      $items[] = $m;
+    }
+    return ['items' => $items, 'page' => $page, 'perPage' => $per, 'total' => (int) $q->found_posts, 'totalPages' => (int) $q->max_num_pages];
+  }
+
+  /** Posts that show an image: in their content (wp-image-ID), as featured image, or as its parent. Best effort. */
+  public static function used_in($id, $limit = 5) {
+    $ids = self::content_posts($id, $limit);
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+    $thumbs = $wpdb->get_col($wpdb->prepare("SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_thumbnail_id' AND meta_value = %s LIMIT %d", (string) $id, $limit));
+    $ids = array_merge($ids, array_map('intval', $thumbs));
+    $parent = (int) wp_get_post_parent_id($id);
+    if ($parent) $ids[] = $parent;
+    $out = [];
+    foreach (array_unique($ids) as $pid) {
+      $p = get_post($pid);
+      if (!$p || in_array($p->post_status, ['trash', 'auto-draft', 'inherit'], true)) continue;
+      $out[] = ['postId' => (int) $pid, 'title' => $p->post_title];
+      if (count($out) >= $limit) break;
+    }
+    return $out;
+  }
+
+  /** Ids of posts whose content has the image (class wp-image-ID). */
+  private static function content_posts($id, $limit = 200) {
+    global $wpdb;
+    $types = array_keys(Visibility_Read::readable_types());
+    if (!$types) return [];
+    $in = implode(',', array_fill(0, count($types), '%s'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $rows = $wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($in) AND post_status NOT IN ('trash','auto-draft','inherit') AND post_content LIKE %s ORDER BY ID LIMIT %d", array_merge($types, ['%' . $wpdb->esc_like('wp-image-' . (int) $id) . '%', (int) $limit])));
+    // The LIKE also matches wp-image-12 for 1; keep exact ids only.
+    return array_values(array_filter(array_map('intval', $rows), function ($pid) use ($id) {
+      return (bool) preg_match('/\bwp-image-' . (int) $id . '\b/', (string) get_post_field('post_content', $pid, 'raw'));
+    }));
+  }
+
+  /**
+   * Set the alt of every <img class="wp-image-ID"> in $content whose alt is
+   * empty or still the image's old library alt (an alt someone wrote for this
+   * page on purpose is kept). Covers core/image blocks (their alt lives in the
+   * HTML) and classic content. @return [content, count]
+   */
+  public static function set_alt_in_content($content, $id, $old_alt, $new_alt) {
+    $n = 0;
+    $out = preg_replace_callback('#<img\b[^>]*>#i', function ($m) use ($id, $old_alt, $new_alt, &$n) {
+      $tag = $m[0];
+      if (!preg_match('/\bwp-image-' . (int) $id . '\b/', $tag)) return $tag;
+      $cur = preg_match('/\salt\s*=\s*("([^"]*)"|\'([^\']*)\')/i', $tag, $a) ? html_entity_decode(isset($a[3]) && $a[3] !== '' ? $a[3] : $a[2], ENT_QUOTES) : '';
+      if ($cur !== '' && $cur !== $old_alt) return $tag;
+      if ($cur === $new_alt && preg_match('/\salt\s*=/i', $tag)) return $tag;
+      $val = 'alt="' . esc_attr($new_alt) . '"';
+      $n++;
+      if (preg_match('/\salt\s*=\s*("[^"]*"|\'[^\']*\')/i', $tag)) return preg_replace('/(\s)alt\s*=\s*("[^"]*"|\'[^\']*\')/i', '${1}' . str_replace(['\\', '$'], ['\\\\', '\$'], $val), $tag, 1);
+      return preg_replace('#\s*(/?)>$#', ' ' . $val . '$1>', $tag, 1);
+    }, (string) $content);
+    return [$out, $n];
+  }
+
+  /**
+   * media.bulk_alt {items:[{mediaId, altText, title?, caption?}]} (max 50).
+   * Each image: library fields, then its alt inside the posts that show it.
+   * One change for the whole batch; rolling it back puts every old value back.
+   */
+  public static function bulk_alt($items) {
+    if (!is_array($items) || !$items) return new WP_Error('invalid', 'items required: [{mediaId, altText, title?, caption?}]');
+    if (count($items) > self::BULK_MAX) return new WP_Error('invalid', sprintf('At most %d images per request.', self::BULK_MAX));
+    $updated = []; $failed = [];
+    $before_state = ['media' => [], 'posts' => []];
+    $after_state = ['media' => [], 'posts' => []];
+    $touched_posts = [];
+    foreach (array_values($items) as $i => $it) {
+      $id = is_array($it) ? (int) ($it['mediaId'] ?? 0) : 0;
+      $p = $id ? get_post($id) : null;
+      if (!$p || $p->post_type !== 'attachment' || strpos((string) $p->post_mime_type, 'image/') !== 0) { $failed[] = ['mediaId' => $id, 'reason' => 'not an image in the media library']; continue; }
+      if (!array_key_exists('altText', $it) || !is_scalar($it['altText'])) { $failed[] = ['mediaId' => $id, 'reason' => 'altText required']; continue; }
+      $refused = Visibility_Policy::check_controls(['images'], $id);
+      if ($refused) { $failed[] = ['mediaId' => $id, 'reason' => $refused[1]]; continue; }
+      $alt = sanitize_text_field((string) $it['altText']);
+      $before = ['altText' => (string) get_post_meta($id, '_wp_attachment_image_alt', true), 'title' => $p->post_title, 'caption' => $p->post_excerpt];
+      update_post_meta($id, '_wp_attachment_image_alt', $alt);
+      $up = ['ID' => $id];
+      if (isset($it['title']) && is_scalar($it['title'])) $up['post_title'] = sanitize_text_field((string) $it['title']);
+      if (isset($it['caption']) && is_scalar($it['caption'])) $up['post_excerpt'] = sanitize_text_field((string) $it['caption']);
+      if (count($up) > 1) wp_update_post($up, true);
+      clean_post_cache($id);
+      $p = get_post($id);
+      $after = ['altText' => (string) get_post_meta($id, '_wp_attachment_image_alt', true), 'title' => $p->post_title, 'caption' => $p->post_excerpt];
+      $before_state['media'][$id] = $before;
+      $after_state['media'][$id] = $after;
+      // The same image inside posts and pages.
+      $blocks = 0; $skipped = [];
+      if ($alt !== '') {
+        foreach (self::content_posts($id) as $pid) {
+          if (Visibility_Policy::check_controls(['images'], $pid)) { $skipped[] = $pid; continue; }
+          $content = isset($after_state['posts'][$pid]) ? $after_state['posts'][$pid] : (string) get_post_field('post_content', $pid, 'raw');
+          list($new, $n) = self::set_alt_in_content($content, $id, $before['altText'], $alt);
+          if (!$n) continue;
+          if (!isset($before_state['posts'][$pid])) $before_state['posts'][$pid] = $content;
+          $after_state['posts'][$pid] = $new;
+          $touched_posts[$pid] = true;
+          $blocks++;
+        }
+      }
+      $row = ['mediaId' => $id, 'before' => $before, 'after' => $after, 'blocksUpdated' => $blocks];
+      if ($skipped) $row['postsSkipped'] = $skipped;
+      $updated[] = $row;
+    }
+    foreach (array_keys($touched_posts) as $pid) {
+      Visibility_Content::save(['ID' => $pid, 'post_content' => $after_state['posts'][$pid]]);
+      $after_state['posts'][$pid] = (string) get_post_field('post_content', $pid, 'raw');
+    }
+    $change = null;
+    if ($updated) {
+      $changed = [];
+      foreach (array_keys($after_state['media']) as $id) $changed[] = 'media:' . $id;
+      foreach (array_keys($after_state['posts']) as $pid) $changed[] = 'posts:' . $pid;
+      $change = Visibility_Changes::record_custom('media.bulk_alt', $changed, $before_state, $after_state);
+    }
+    $purged = [];
+    foreach (array_keys($touched_posts) as $pid) $purged = array_merge($purged, Visibility_Cache::purge($pid));
+    return ['updated' => $updated, 'failed' => $failed, 'changeId' => $change, 'postsUpdated' => array_map('intval', array_keys($touched_posts)), 'cachePurged' => array_values(array_unique($purged))];
+  }
+
+  /** Undo a media.bulk_alt change, only while nothing was changed since. */
+  public static function rollback_custom($result, $row, $states) {
+    if ($row->action !== 'media.bulk_alt') return;
+    list($before, $after) = $states;
+    $drift = [];
+    foreach ((array) $after['media'] as $id => $a) {
+      $p = get_post($id);
+      if (!$p) { $drift[] = 'media:' . $id; continue; }
+      $now = ['altText' => (string) get_post_meta($id, '_wp_attachment_image_alt', true), 'title' => $p->post_title, 'caption' => $p->post_excerpt];
+      if ($now !== $a) $drift[] = 'media:' . $id;
+    }
+    foreach ((array) $after['posts'] as $pid => $content) {
+      if ((string) get_post_field('post_content', $pid, 'raw') !== $content) $drift[] = 'posts:' . $pid;
+    }
+    if ($drift) {
+      $result->error = new WP_Error('conflict', 'Some images or pages were changed after this change, so it was not rolled back: ' . implode(', ', $drift) . '.', ['changedSince' => $drift]);
+      return;
+    }
+    foreach ((array) $before['media'] as $id => $b) {
+      update_post_meta($id, '_wp_attachment_image_alt', $b['altText']);
+      wp_update_post(['ID' => $id, 'post_title' => $b['title'], 'post_excerpt' => $b['caption']]);
+    }
+    foreach ((array) $before['posts'] as $pid => $content) {
+      Visibility_Content::save(['ID' => $pid, 'post_content' => $content]);
+      Visibility_Cache::purge($pid);
+    }
+    $result->data = ['media' => array_map('intval', array_keys((array) $before['media'])), 'posts' => array_map('intval', array_keys((array) $before['posts']))];
+  }
 }
