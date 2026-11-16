@@ -305,7 +305,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ] + Visibility_Requests::describe(),
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver'],
     ];
   }
 }
