@@ -31,7 +31,7 @@ class Visibility_Changes {
    * Caches that plugins rebuild on their own (often when the page is viewed):
    * never part of a change, never a reason to refuse a rollback.
    */
-  const IGNORED_META_PREFIXES = ['_uag_', '_uagb_', '_generateblocks_dynamic_css', '_kad_blocks_', '_kadence_blocks_', '_kb_', '_elementor_page_assets', '_elementor_css', '_elementor_element_cache', '_elementor_migrations_state', '_elementor_global_class_usage', 'rank_math_internal_links_processed', 'rank_math_og_content_image', 'rank_math_analytic_object_id', '_yoast_indexable', '_oembed_', '_yoast_wpseo_estimated-reading-time', '_wp_old_slug_cache', '_litespeed', '_wpfc_', '_sg_'];
+  const IGNORED_META_PREFIXES = ['_uag_', '_uagb_', '_generateblocks_dynamic_css', '_kad_blocks_', '_kadence_blocks_', '_kb_', '_elementor_page_assets', '_elementor_css', '_elementor_element_cache', '_elementor_migrations_state', '_elementor_global_class_usage', 'rank_math_internal_links_processed', 'rank_math_og_content_image', 'rank_math_analytic_object_id', '_yoast_indexable', '_oembed_', '_yoast_wpseo_estimated-reading-time', '_wp_old_slug_cache', '_litespeed', '_wpfc_', '_sg_', '_et_dynamic_cached_', '_et_builder_dynamic_assets_', '_et_pb_ab_', '_et_builder_module_features_cache'];
 
   public static function ignored_meta($key) {
     if (in_array($key, self::IGNORED_META, true)) return true;
