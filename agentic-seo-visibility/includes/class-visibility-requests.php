@@ -20,7 +20,7 @@ class Visibility_Requests {
   const CRON_HOOK = 'visibility_pull_approved_requests';
 
   public static function init() {
-    add_action(self::CRON_HOOK, [__CLASS__, 'run_cron_tick']);
+    add_action(self::CRON_HOOK, [__CLASS__, 'run_cron_tick'], 10, 0);
   }
 
   public static function activate_cron() {
@@ -49,8 +49,21 @@ class Visibility_Requests {
 
   // ─── Cron tick ─────────────────────────────────────────────────────────
 
-  public static function run_cron_tick() {
+  const TICK_OPTION = 'visibility_last_tick';
+  /** A tick older than this is "late": the next call from Visibility starts one. */
+  const LATE_AFTER = 10 * MINUTE_IN_SECONDS;
+
+  /**
+   * WP-Cron only runs when someone visits the site (#280). Approved changes
+   * arrive by push and run at once; this tick is the backup that catches
+   * anything a failed push missed. Visibility calls the site on its own
+   * schedule, so each authenticated call starts a late tick in the
+   * background: a quiet site never waits for a visitor.
+   */
+  public static function run_cron_tick($via = null) {
     if (!Visibility_Client::is_paired()) return;
+    if (!is_string($via) || $via === '') $via = (defined('WP_CLI') && WP_CLI) ? 'cli' : (wp_doing_cron() ? 'web' : 'push');
+    update_option(self::TICK_OPTION, ['at' => time(), 'via' => $via], false);
     // Results that ran but could not be reported last time: report them now.
     self::retry_unreported();
     $rows = Visibility_Client::inbox(true);
@@ -65,6 +78,54 @@ class Visibility_Requests {
       self::run((string) $row['id'], $action_type, $payload);
     }
     self::prune();
+  }
+
+  /** When the last tick ran: ['at' => unix, 'via' => web|cli|push] or null. */
+  public static function last_tick() {
+    $t = get_option(self::TICK_OPTION, null);
+    return is_array($t) && !empty($t['at']) ? $t : null;
+  }
+
+  /** True when a real system cron (wp cron event run --due-now) drives the ticks. */
+  public static function system_cron() {
+    $t = self::last_tick();
+    if (!$t || time() - (int) $t['at'] > 2 * HOUR_IN_SECONDS) return false;
+    return $t['via'] === 'cli' || (defined('DISABLE_WP_CRON') && DISABLE_WP_CRON && $t['via'] !== 'push');
+  }
+
+  /** /capabilities `cron` additions. */
+  public static function describe() {
+    $t = self::last_tick();
+    return [
+      'lastTickAt'  => $t ? gmdate('Y-m-d\TH:i:s\Z', (int) $t['at']) : null,
+      'lastTickVia' => $t ? (string) $t['via'] : null,
+      'systemCron'  => self::system_cron(),
+    ];
+  }
+
+  /**
+   * Called after Visibility authenticated: if the backup tick is late, run it
+   * at the end of this request, after the response.
+   */
+  public static function catch_up_if_late() {
+    static $done = false;
+    if ($done || !Visibility_Client::is_paired()) return;
+    $done = true;
+    $t = self::last_tick();
+    if ($t && time() - (int) $t['at'] < self::LATE_AFTER) return;
+    // One catch-up at a time across processes.
+    if (get_transient('visibility_catch_up')) return;
+    set_transient('visibility_catch_up', 1, 2 * MINUTE_IN_SECONDS);
+    add_action('shutdown', function () {
+      // PHP-FPM / LiteSpeed: send the answer first, then run. Elsewhere it
+      // runs right after the answer is written (one inbox call at most every
+      // 10 minutes). No loopback request: many hosts block those.
+      if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+      elseif (function_exists('litespeed_finish_request')) litespeed_finish_request();
+      ignore_user_abort(true);
+      self::run_cron_tick('push');
+      delete_transient('visibility_catch_up');
+    }, 100);
   }
 
   // ─── Run each approved request exactly once ────────────────────────────

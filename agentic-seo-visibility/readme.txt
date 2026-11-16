@@ -89,6 +89,10 @@ On pairing and once a day for heartbeats, the plugin sends your site URL, site n
 
 Deactivate it from the Plugins screen, then delete it. On deactivation the scheduled tasks are removed; on delete the plugin removes its connection key (`visibility_site_token`), every other `visibility_*` setting, its temporary data and its scheduled tasks. SEO fields it saved on your posts are kept, since your pages may rely on them (define `VISIBILITY_UNINSTALL_DELETE_POST_META` as true in wp-config.php to remove those too). Your data in Visibility is untouched; disconnect **before** deleting if you also want Visibility to forget this site.
 
+= My site gets few visitors. Do approved changes wait for one? =
+
+No. Visibility sends every approved change to your site and the plugin applies it straight away. As a backup the plugin also checks for approved changes every 5 minutes, and each time Visibility contacts your site it runs that check if it is late. WordPress's own scheduler (WP-Cron) only runs when someone visits, so on a very quiet site you can add a real cron job on your server that runs `wp cron event run --due-now` (or requests `wp-cron.php`) every 5 minutes. Agentic SEO, Connection shows when the last check ran.
+
 = What WordPress and PHP versions does it require? =
 
 WordPress 6.0 or newer and PHP 7.4 or newer. Tested up to WordPress 7.0.

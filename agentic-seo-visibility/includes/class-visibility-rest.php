@@ -215,6 +215,8 @@ class Visibility_REST {
     if ($stored === '' || !hash_equals($stored, $token)) {
       return new WP_Error('visibility_bad_token', __('Invalid site token.', 'agentic-seo-visibility'), ['status' => 401]);
     }
+    // Quiet sites (#280): a call from Visibility starts a late backup tick.
+    Visibility_Requests::catch_up_if_late();
     return true;
   }
 
@@ -265,7 +267,7 @@ class Visibility_REST {
     if (!class_exists('Visibility_Requests')) {
       return new WP_Error('visibility_no_requests_class', 'Plugin internals not loaded.', ['status' => 500]);
     }
-    Visibility_Requests::run_cron_tick();
+    Visibility_Requests::run_cron_tick('push');
     return rest_ensure_response(['ok' => true]);
   }
 

@@ -344,6 +344,20 @@ class Visibility_Settings {
               <td><?php echo $last_seen_at ? esc_html(human_time_diff($last_seen_at, time())) . ' ' . esc_html__('ago', 'agentic-seo-visibility') : esc_html__('Never', 'agentic-seo-visibility'); ?></td>
             </tr>
             <tr>
+              <th scope="row"><?php echo esc_html__('Last check for approved changes', 'agentic-seo-visibility'); ?></th>
+              <td id="visibility-last-tick"><?php
+                $tick = Visibility_Requests::last_tick();
+                if ($tick) {
+                  echo esc_html(human_time_diff((int) $tick['at'], time())) . ' ' . esc_html__('ago', 'agentic-seo-visibility');
+                  if (Visibility_Requests::system_cron()) echo ' &middot; ' . esc_html__('by a system cron job', 'agentic-seo-visibility');
+                } else {
+                  echo esc_html__('Not yet', 'agentic-seo-visibility');
+                }
+              ?>
+                <p class="description"><?php echo esc_html__('Approved changes are sent to this site and applied at once. As a backup the plugin also checks every 5 minutes, but WordPress only runs that check when someone visits the site. On a quiet site, add a real cron job that runs "wp cron event run --due-now" every 5 minutes (or calls wp-cron.php) so the backup never waits.', 'agentic-seo-visibility'); ?></p>
+              </td>
+            </tr>
+            <tr>
               <th scope="row"><?php echo esc_html__('Plugin version', 'agentic-seo-visibility'); ?></th>
               <td><?php echo esc_html(VISIBILITY_PLUGIN_VERSION); ?></td>
             </tr>
