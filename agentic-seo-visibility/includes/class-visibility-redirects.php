@@ -1,6 +1,6 @@
 <?php
 /**
- * Redirects (#292, #270, #271).
+ * Redirects (#292, #270, #271, C-31 to C-36).
  *
  * One interface over the redirect plugins a site may have, plus a small store
  * of the plugin's own for sites without one:
@@ -80,6 +80,7 @@ class Visibility_Redirects {
       'auto'     => true,
       'loopCheck' => true,
     ];
+    if ($p === 'redirection') $out['groups'] = self::redirection_groups();
     return $out;
   }
 
@@ -214,6 +215,7 @@ class Visibility_Redirects {
       'perPage'    => $per,
       'totalPages' => (int) ceil($total / $per),
     ];
+    if ($p === 'redirection') $out['groups'] = self::redirection_groups();
     return $out;
   }
 
@@ -491,9 +493,17 @@ class Visibility_Redirects {
     return array_map(function ($g) { return ['id' => (int) $g->id, 'name' => $g->name, 'module' => (int) $g->module_id]; }, (array) $rows);
   }
 
-  /** The "Visibility" group, found or created (#270): group 1 can be deleted or belong to another module. */
+  /** The group to use: the one asked (id or name), else the "Visibility" group, found or created (#270). */
   private static function redirection_group($want) {
     $groups = self::redirection_groups();
+    if ($want !== null && $want !== '') {
+      foreach ($groups as $g) {
+        if ((is_numeric($want) && (int) $want === $g['id']) || (!is_numeric($want) && strcasecmp((string) $want, $g['name']) === 0)) return $g['id'];
+      }
+      if (is_numeric($want)) return new WP_Error('invalid', sprintf('Redirection has no group %d. Groups: %s.', (int) $want, implode(', ', array_map(function ($g) { return $g['id'] . ' ' . $g['name']; }, $groups))));
+      $made = Red_Group::create(sanitize_text_field((string) $want), 1);
+      return $made ? (int) $made->get_id() : new WP_Error('save_failed', 'Redirection could not create the group.');
+    }
     $saved = (int) get_option(self::GROUP_OPTION, 0);
     foreach ($groups as $g) if ($g['id'] === $saved && $g['module'] === 1) return $saved;
     foreach ($groups as $g) if ($g['name'] === 'Visibility' && $g['module'] === 1) { update_option(self::GROUP_OPTION, $g['id'], false); return $g['id']; }
