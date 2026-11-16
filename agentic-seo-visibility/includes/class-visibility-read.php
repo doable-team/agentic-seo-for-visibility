@@ -257,10 +257,11 @@ class Visibility_Read {
     if (defined('KINSTAMU_VERSION')) $caches[] = ['slug' => 'kinsta', 'name' => 'Kinsta cache', 'version' => KINSTAMU_VERSION];
 
     $multilingual = null;
-    if (function_exists('pll_languages_list') || defined('ICL_SITEPRESS_VERSION')) {
+    if (function_exists('pll_languages_list') || defined('ICL_SITEPRESS_VERSION') || Visibility_Languages::provider() === 'translatepress') {
       $multilingual = Visibility_Languages::describe();
     } elseif (class_exists('TRP_Translate_Press')) {
-      $multilingual = ['slug' => 'translatepress', 'name' => 'TranslatePress', 'version' => defined('TRP_PLUGIN_VERSION') ? TRP_PLUGIN_VERSION : null, 'languages' => [], 'default' => null];
+      // Installed with only one language: nothing to translate yet.
+      $multilingual = ['slug' => 'translatepress', 'name' => 'TranslatePress', 'version' => defined('TRP_PLUGIN_VERSION') ? TRP_PLUGIN_VERSION : null, 'languages' => [], 'default' => null, 'writable' => false];
     }
 
     $next = function ($hook) {
@@ -320,7 +321,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ] + Visibility_Requests::describe(),
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver', 'builder.read', 'seo.theme'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver', 'builder.read', 'seo.theme', 'multilingual.translatepress'],
     ];
   }
 }

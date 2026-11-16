@@ -24,6 +24,13 @@
  *             wpml_is_translated_post_type, wpml_set_element_language_details
  *             (language + link to the source), wpml_switch_language (scoped
  *             query language, closed with null).
+ *   translatepress  TranslatePress keeps one post per page and stores the
+ *             translated text in its own tables, so a post has no separate
+ *             translations to edit. Read-only (C-42): the page language is
+ *             the default language, `translations` lists each published
+ *             language with its URL (get_url_for_language), edits name the
+ *             default language or none; any other language is refused with
+ *             language_unsupported. Visibility never changes translated text.
  * WPML found but one of those hooks missing (an old or changed WPML): the
  * site is reported as multilingual but not writable, and creating content in
  * a language is refused instead of guessed.
@@ -61,7 +68,57 @@ class Visibility_Languages {
   public static function provider() {
     if (function_exists('pll_get_post_language') && function_exists('pll_languages_list') && count((array) pll_languages_list()) > 0) return 'polylang';
     if (self::wpml_ready() && count(self::wpml_languages()) > 0) return 'wpml';
+    if (self::trp_settings()) return 'translatepress';
     return null;
+  }
+
+  // ─── TranslatePress (C-42) ─────────────────────────────────────────────
+
+  /** TranslatePress settings with at least one extra language, else null. */
+  private static function trp_settings() {
+    if (!class_exists('TRP_Translate_Press')) return null;
+    $s = null;
+    $trp = TRP_Translate_Press::get_trp_instance();
+    if (is_object($trp) && method_exists($trp, 'get_component')) {
+      $c = $trp->get_component('settings');
+      if (is_object($c) && method_exists($c, 'get_settings')) $s = $c->get_settings();
+    }
+    if (!is_array($s)) $s = get_option('trp_settings', null);
+    if (!is_array($s) || empty($s['default-language'])) return null;
+    $langs = !empty($s['publish-languages']) ? (array) $s['publish-languages'] : (array) ($s['translation-languages'] ?? []);
+    return count($langs) > 1 ? $s : null;
+  }
+
+  /** TranslatePress language codes are locales (en_US); its URL slugs are short (en). */
+  private static function trp_slug($s, $code) {
+    return isset($s['url-slugs'][$code]) && $s['url-slugs'][$code] !== '' ? (string) $s['url-slugs'][$code] : strtolower(substr($code, 0, 2));
+  }
+
+  private static function trp_languages() {
+    $s = self::trp_settings();
+    if (!$s) return [];
+    $langs = !empty($s['publish-languages']) ? (array) $s['publish-languages'] : (array) $s['translation-languages'];
+    return array_values(array_map(function ($c) use ($s) { return self::trp_slug($s, $c); }, $langs));
+  }
+
+  /** [{language, url}] for a post on a TranslatePress site. */
+  private static function trp_translations($post_id) {
+    $s = self::trp_settings();
+    $url = get_permalink((int) $post_id);
+    if (!$s || !$url) return [];
+    $conv = null;
+    $trp = TRP_Translate_Press::get_trp_instance();
+    if (is_object($trp) && method_exists($trp, 'get_component')) $conv = $trp->get_component('url_converter');
+    $out = [];
+    $langs = !empty($s['publish-languages']) ? (array) $s['publish-languages'] : (array) $s['translation-languages'];
+    foreach ($langs as $code) {
+      $u = $url;
+      if ($code !== $s['default-language'] && is_object($conv) && method_exists($conv, 'get_url_for_language')) {
+        $u = (string) $conv->get_url_for_language($code, $url, '');
+      }
+      $out[] = ['language' => self::trp_slug($s, $code), 'locale' => (string) $code, 'url' => $u];
+    }
+    return $out;
   }
 
   /** WPML is installed (it defines ICL_SITEPRESS_VERSION). */
@@ -110,6 +167,7 @@ class Visibility_Languages {
     $p = self::provider();
     if ($p === 'polylang') return array_values((array) pll_languages_list());
     if ($p === 'wpml') return self::wpml_languages();
+    if ($p === 'translatepress') return self::trp_languages();
     return [];
   }
 
@@ -119,6 +177,10 @@ class Visibility_Languages {
     if ($p === 'wpml') {
       $d = apply_filters('wpml_default_language', null);
       return is_string($d) && $d !== '' ? $d : null;
+    }
+    if ($p === 'translatepress') {
+      $s = self::trp_settings();
+      return self::trp_slug($s, $s['default-language']);
     }
     return null;
   }
@@ -134,12 +196,15 @@ class Visibility_Languages {
       $d = self::wpml_details($post_id);
       return $d ? (string) $d->language_code : null;
     }
+    // One post for every language; what is stored is the default language.
+    if ($p === 'translatepress') return get_post((int) $post_id) ? self::default_language() : null;
     return null;
   }
 
-  /** {lang: post id} for the post's translation group (itself included). */
+  /** {lang: post id} for the post's translation group (itself included); TranslatePress: [{language, locale, url}]. */
   public static function translations($post_id) {
     $p = self::provider();
+    if ($p === 'translatepress') return self::trp_translations($post_id);
     if ($p === 'polylang') {
       if (!function_exists('pll_get_post_translations')) return null;
       return (object) array_map('intval', (array) pll_get_post_translations((int) $post_id));
@@ -172,6 +237,7 @@ class Visibility_Languages {
     $p = self::provider();
     if ($p === 'polylang') return function_exists('pll_is_translated_post_type') && pll_is_translated_post_type($type);
     if ($p === 'wpml') return (bool) apply_filters('wpml_is_translated_post_type', null, $type);
+    if ($p === 'translatepress') return true;
     return false;
   }
 
@@ -183,6 +249,7 @@ class Visibility_Languages {
    */
   public static function query(array $args, $lang, $fn) {
     $p = self::provider();
+    if ($p === 'translatepress') return $fn($args);
     $lang = ($lang !== '' && in_array($lang, self::languages(), true)) ? $lang : '';
     if ($p === 'polylang') {
       $args['lang'] = $lang;
@@ -214,6 +281,14 @@ class Visibility_Languages {
    */
   public static function check_edit($post_id, $language) {
     if (!self::active()) return null;
+    if (self::provider() === 'translatepress') {
+      // Only the stored (default-language) text can change; translated text lives in TranslatePress.
+      $language = is_string($language) ? sanitize_key(str_replace('-', '_', $language)) : '';
+      $def = self::default_language();
+      $s = self::trp_settings();
+      if ($language === '' || $language === $def || strtolower($language) === strtolower((string) $s['default-language'])) return null;
+      return ['language_unsupported', sprintf('This site translates pages with TranslatePress, which keeps translations in its own tables. Visibility only changes the %s text; edit the %s translation in TranslatePress.', $def, $language)];
+    }
     $post = get_post((int) $post_id);
     if (!$post || !self::translated_type($post->post_type)) return null;
     $has = self::of($post->ID);
@@ -248,6 +323,12 @@ class Visibility_Languages {
   public static function assign($post_id, $language, $source_id = 0) {
     $language = is_string($language) ? sanitize_key($language) : '';
     $source_id = (int) $source_id;
+    if (self::provider() === 'translatepress') {
+      if ($source_id || ($language !== '' && $language !== self::default_language())) {
+        return new WP_Error('language_unsupported', sprintf('This site translates pages with TranslatePress: there is one page for every language. Create the page in %s and translate it in TranslatePress.', self::default_language()));
+      }
+      return true;
+    }
     if (!self::active()) {
       if (($language !== '' || $source_id) && self::wpml_present()) {
         return new WP_Error('unsupported', sprintf('WPML is active but does not offer the hooks Visibility uses (%s), so the language was not set. Set it in WordPress.', implode(', ', self::wpml_missing_hooks())));
@@ -310,6 +391,18 @@ class Visibility_Languages {
         'default'   => self::default_language(),
         'writable'  => true,
         'languageRequired' => true,
+      ];
+    }
+    if ($p === 'translatepress') {
+      return [
+        'slug'      => 'translatepress',
+        'name'      => 'TranslatePress',
+        'version'   => defined('TRP_PLUGIN_VERSION') ? TRP_PLUGIN_VERSION : null,
+        'languages' => self::languages(),
+        'default'   => self::default_language(),
+        'writable'  => false,
+        'languageRequired' => false,
+        'note'      => 'TranslatePress keeps one page for every language and stores translations in its own tables. Visibility reads and changes the default-language text only; translations are edited in TranslatePress.',
       ];
     }
     if (self::wpml_present()) {
