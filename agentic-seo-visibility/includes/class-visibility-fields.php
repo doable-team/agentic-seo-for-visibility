@@ -6,6 +6,7 @@
  *   acf:<field key>          Advanced Custom Fields (free + Pro), always by field key
  *   metabox:<field id>       Meta Box
  *   pods:<field name>        Pods
+ *   jetengine:<field name>   JetEngine meta boxes (post meta under the field name)
  *   theme:<theme>:<meta key> theme page options (Astra, GeneratePress, Kadence, OceanWP)
  *   meta:<meta key>          other post meta registered with show_in_rest
  *
@@ -24,6 +25,8 @@ class Visibility_Fields {
   const ACF_WRITABLE = ['text', 'textarea', 'wysiwyg', 'url', 'email', 'image', 'number', 'range', 'select', 'radio', 'button_group', 'true_false', 'checkbox', 'repeater', 'group'];
   const MB_WRITABLE  = ['text', 'textarea', 'wysiwyg', 'url', 'email', 'number', 'range', 'select', 'radio', 'checkbox', 'switch', 'image_advanced', 'single_image', 'image'];
   const PODS_WRITABLE = ['text', 'paragraph', 'wysiwyg', 'website', 'email', 'number', 'currency', 'pick', 'boolean', 'phone', 'file'];
+  /** JetEngine field types we can write as JetEngine stores them (plain post meta). */
+  const JET_WRITABLE = ['text', 'textarea', 'wysiwyg', 'number', 'select', 'radio', 'switcher', 'media'];
 
   /**
    * Theme page options stored as post meta: theme => [meta key => [label, type, choices|null]].
@@ -109,7 +112,7 @@ class Visibility_Fields {
   public static function schema($type, $post_id = 0) {
     $out = [];
     $seen_meta = [];
-    foreach (['acf', 'metabox', 'pods'] as $src) {
+    foreach (['acf', 'metabox', 'pods', 'jetengine'] as $src) {
       if (!method_exists(__CLASS__, 'schema_' . $src)) continue;
       foreach (call_user_func([__CLASS__, 'schema_' . $src], $type, $post_id) as $f) {
         if (!empty($f['metaKey'])) $seen_meta[$f['metaKey']] = true;
@@ -208,6 +211,66 @@ class Visibility_Fields {
     return $out;
   }
 
+  /**
+   * JetEngine (#337): meta box fields for a post type, from JetEngine's own
+   * registry (jet_engine()->meta_boxes->get_meta_fields_for_object(), which
+   * also holds the fields of JetEngine post types), else from the meta box
+   * config it saves in the jet_engine_meta_boxes option. Each field:
+   * {name, title, type, object_type, options:[{key, value}], is_multiple,
+   * value_format}. Layout items (tabs, accordions, endpoints) are skipped.
+   */
+  public static function jetengine_fields($type) {
+    if (!class_exists('Jet_Engine')) return [];
+    $raw = null;
+    if (function_exists('jet_engine')) {
+      $je = jet_engine();
+      if (is_object($je) && isset($je->meta_boxes) && is_object($je->meta_boxes) && method_exists($je->meta_boxes, 'get_meta_fields_for_object')) {
+        $raw = $je->meta_boxes->get_meta_fields_for_object($type);
+      }
+    }
+    // Meta boxes from the saved config keep their titles; fields only the
+    // registry has (JetEngine post types' own fields) come after them.
+    $groups = [];
+    $seen = [];
+    foreach ((array) get_option('jet_engine_meta_boxes', []) as $box) {
+      $args = isset($box['args']) && is_array($box['args']) ? $box['args'] : [];
+      if (($args['object_type'] ?? 'post') !== 'post') continue;
+      if (!in_array($type, (array) ($args['allowed_post_type'] ?? []), true)) continue;
+      $fields = (array) ($box['meta_fields'] ?? []);
+      foreach ($fields as $f) if (is_array($f) && !empty($f['name'])) $seen[$f['name']] = true;
+      $groups[] = ['title' => !empty($args['name']) ? (string) $args['name'] : 'JetEngine fields', 'fields' => $fields];
+    }
+    if (is_array($raw) && $raw) {
+      $extra = array_filter($raw, function ($f) use ($seen) { return is_array($f) && !empty($f['name']) && !isset($seen[$f['name']]); });
+      if ($extra) $groups[] = ['title' => 'JetEngine fields', 'fields' => array_values($extra)];
+    }
+    $out = [];
+    foreach ($groups as $g) {
+      foreach ($g['fields'] as $f) {
+        if (!is_array($f) || empty($f['name']) || empty($f['type'])) continue;
+        if (!empty($f['object_type']) && $f['object_type'] !== 'field') continue;
+        $out[] = $f + ['_group' => $g['title']];
+      }
+    }
+    return $out;
+  }
+
+  private static function schema_jetengine($type, $post_id) {
+    $out = [];
+    foreach (self::jetengine_fields($type) as $f) {
+      $ftype = (string) $f['type'];
+      $o = ['key' => 'jetengine:' . $f['name'], 'label' => !empty($f['title']) ? (string) $f['title'] : (string) $f['name'], 'type' => $ftype === 'switcher' ? 'boolean' : ($ftype === 'media' ? 'image' : $ftype), 'group' => $f['_group'] . ' (JetEngine)', 'source' => 'jetengine', 'metaKey' => (string) $f['name']];
+      if (in_array($ftype, ['select', 'radio', 'checkbox'], true) && !empty($f['options']) && is_array($f['options'])) {
+        $o['choices'] = array_values(array_map(function ($c) { return is_array($c) ? (string) ($c['key'] ?? '') : (string) $c; }, $f['options']));
+      }
+      $multiple = !empty($f['is_multiple']) && filter_var($f['is_multiple'], FILTER_VALIDATE_BOOLEAN);
+      $media_id = $ftype !== 'media' || empty($f['value_format']) || $f['value_format'] === 'id';
+      if (!in_array($ftype, self::JET_WRITABLE, true) || $multiple || !$media_id) $o['readOnly'] = true;
+      $out[] = $o;
+    }
+    return $out;
+  }
+
   // ─── Values ────────────────────────────────────────────────────────────
 
   /** Fields of a post with their current values (the read endpoint's `fields`). */
@@ -239,6 +302,11 @@ class Visibility_Fields {
           if (is_array($v) && isset($v['ID'])) return self::image_value((int) $v['ID']);
           if (is_numeric($v)) return self::image_value((int) $v);
         }
+        return $v;
+      case 'jetengine':
+        $v = get_post_meta($post_id, $f['metaKey'], true);
+        if ($f['type'] === 'boolean') return $v === '' ? null : filter_var($v, FILTER_VALIDATE_BOOLEAN);
+        if ($f['type'] === 'image' && is_numeric($v) && $v) return self::image_value((int) $v);
         return $v;
       default:
         $v = get_post_meta($post_id, $f['metaKey'], true);
@@ -397,6 +465,13 @@ class Visibility_Fields {
       case 'pods':
         $r = pods(get_post_type($post_id), $post_id)->save([$f['metaKey'] => $value]);
         return $r ? true : new WP_Error('save_failed', sprintf('Pods did not save %s', $f['key']));
+      case 'jetengine':
+        // JetEngine keeps each field as plain post meta under its name;
+        // switchers as "true"/"false", media (id format) as the attachment id.
+        if ($value === null || $value === '') { delete_post_meta($post_id, $f['metaKey']); return true; }
+        if ($f['type'] === 'boolean') $value = $value ? 'true' : 'false';
+        update_post_meta($post_id, $f['metaKey'], is_string($value) ? wp_slash($value) : $value);
+        return true;
       default:
         if ($value === null || $value === '') delete_post_meta($post_id, $f['metaKey']);
         else update_post_meta($post_id, $f['metaKey'], is_string($value) ? wp_slash($value) : $value);
@@ -423,7 +498,12 @@ class Visibility_Fields {
     if (class_exists('ACF')) $out[] = ['slug' => 'acf', 'name' => defined('ACF_PRO') ? 'Advanced Custom Fields Pro' : 'Advanced Custom Fields', 'version' => defined('ACF_VERSION') ? ACF_VERSION : null, 'writable' => true];
     if (defined('RWMB_VER')) $out[] = ['slug' => 'metabox', 'name' => 'Meta Box', 'version' => RWMB_VER, 'writable' => true];
     if (defined('PODS_VERSION')) $out[] = ['slug' => 'pods', 'name' => 'Pods', 'version' => PODS_VERSION, 'writable' => true];
-    if (class_exists('Jet_Engine')) $out[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => defined('JET_ENGINE_VERSION') ? JET_ENGINE_VERSION : null, 'writable' => false];
+    if (class_exists('Jet_Engine')) {
+      $ver = function_exists('jet_engine') && is_object(jet_engine()) && method_exists(jet_engine(), 'get_version') ? jet_engine()->get_version() : null;
+      // Writable when its fields can be read from JetEngine's registry or saved config.
+      $readable = function_exists('jet_engine') || is_array(get_option('jet_engine_meta_boxes', null));
+      $out[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => $ver, 'writable' => $readable];
+    }
     $theme = self::active_theme();
     if ($theme) $out[] = ['slug' => $theme, 'name' => wp_get_theme($theme)->get('Name') . ' page options', 'version' => wp_get_theme($theme)->get('Version'), 'writable' => true, 'theme' => true];
     return $out;
