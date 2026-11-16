@@ -31,13 +31,15 @@ class Visibility_Cache {
       // (and what WP Rocket ties to it: its archives, feeds, parents). WP
       // Rocket also runs it on clean_post_cache, once per post per request,
       // so the save itself may already have purged it; it skips drafts and
-      // autosaves. Purged = after_rocket_clean_post fired for the post.
+      // autosaves. Purged = after_rocket_clean_post fired for the post AND
+      // no cache file is left for its URL: WP Rocket returns true and fires
+      // the action even when it could not delete the files (file permissions).
       'wp-rocket' => [
         'WP Rocket',
         function () { return function_exists('rocket_clean_post'); },
         function ($id, $url) {
-          if (rocket_clean_post($id) === true) return true;
-          return isset(Visibility_Cache::$rocket_cleaned[(int) $id]);
+          $ran = rocket_clean_post($id) === true || isset(Visibility_Cache::$rocket_cleaned[(int) $id]);
+          return $ran && !Visibility_Cache::rocket_files_left($url);
         },
       ],
       // WP Super Cache: the post's own page (and what WPSC ties to it).
@@ -124,6 +126,29 @@ class Visibility_Cache {
      * Add a purger: $purgers['slug'] = [name, detect callable, purge callable($post_id, $url)].
      */
     return apply_filters('visibility_cache_purgers', $p);
+  }
+
+  /**
+   * A WP Rocket cache file is still on disk for $url (the page's own
+   * index*.html files in each of its cache folders: desktop, mobile, https,
+   * logged-in), found the way WP Rocket's rocket_clean_files() finds them.
+   */
+  public static function rocket_files_left($url) {
+    if ($url === '' || !function_exists('get_rocket_parse_url') || !function_exists('_rocket_get_cache_dirs') || !function_exists('_rocket_get_wp_rocket_cache_path')) return false;
+    if (apply_filters('rocket_url_no_dots', false)) $url = str_replace('.', '_', $url);
+    $p = get_rocket_parse_url($url);
+    if (empty($p['host'])) return false;
+    $path = (string) $p['path'];
+    if (strpos($path, '%') !== false) $path = rawurldecode($path);
+    // Non-Latin characters are stored lowercased and url-encoded, as WP Rocket does.
+    $path = preg_replace_callback('/[^\x00-\x7F]+/', function ($m) { return strtolower(rawurlencode($m[0])); }, $path);
+    $dirs = _rocket_get_cache_dirs($p['host'], _rocket_get_wp_rocket_cache_path());
+    clearstatcache();
+    foreach ((array) $dirs as $dir) {
+      $files = glob(rtrim($dir . $path, '/') . '/index*.html*');
+      if (!empty($files)) return true;
+    }
+    return false;
   }
 
   /** Kinsta's purge object when the Kinsta must-use plugin is loaded with selective purging. */
