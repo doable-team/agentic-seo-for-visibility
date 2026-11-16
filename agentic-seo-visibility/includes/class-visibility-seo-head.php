@@ -41,7 +41,7 @@ class Visibility_SEO_Head {
   }
 
   public static function robots($robots) {
-    if (!self::enabled()) return $robots;
+    if (!self::enabled() || in_array('robots', Visibility_SEO::theme_printed(), true)) return $robots;
     $v = self::current_values();
     if (!$v || $v['robots'] === '') return $robots;
     foreach (explode(',', $v['robots']) as $d) {
@@ -68,7 +68,7 @@ class Visibility_SEO_Head {
 
   /** The SEO title set for the queried post or term, if any. */
   public static function document_title($title) {
-    if (!self::enabled()) return $title;
+    if (!self::enabled() || in_array('title', Visibility_SEO::theme_printed(), true)) return $title;
     $v = self::current_values();
     return ($v && $v['title'] !== '') ? $v['title'] : $title;
   }
@@ -91,7 +91,9 @@ class Visibility_SEO_Head {
    * `seo.rendered` on sites without an SEO plugin).
    */
   public static function values_for_post($post_id) {
-    $a = new Visibility_SEO_Adapter_None();
+    // The theme's SEO fields (C-41) when it has them, else Visibility's own keys.
+    $a = Visibility_SEO::adapter();
+    if (!($a instanceof Visibility_SEO_Adapter_None)) $a = new Visibility_SEO_Adapter_None();
     $v = $a->read($post_id);
     $description = $v['metaDescription'];
     if ($description === '') {
@@ -147,6 +149,12 @@ class Visibility_SEO_Head {
     $v = self::current_values();
     if (!$v) return;
 
+    // Parts the theme prints from its own SEO fields (C-41) are left to it.
+    $theme = Visibility_SEO::theme_printed();
+    if (in_array('description', $theme, true)) $v['description'] = '';
+    if (in_array('canonical', $theme, true)) $v['canonicalSet'] = false;
+    if (in_array('og', $theme, true)) { $v['ogTitle'] = ''; $v['ogDescription'] = ''; $v['ogImage'] = ''; }
+
     echo "\n<!-- Agentic SEO for Visibility -->\n";
     if ($v['description'] !== '') {
       printf("<meta name=\"description\" content=\"%s\" />\n", esc_attr($v['description']));
@@ -165,8 +173,10 @@ class Visibility_SEO_Head {
     if ($v['ogTitle'] !== '') printf("<meta property=\"og:title\" content=\"%s\" />\n", esc_attr($v['ogTitle']));
     if ($v['ogDescription'] !== '') printf("<meta property=\"og:description\" content=\"%s\" />\n", esc_attr($v['ogDescription']));
     if ($v['ogImage'] !== '') printf("<meta property=\"og:image\" content=\"%s\" />\n", esc_url($v['ogImage']));
-    printf("<meta property=\"og:type\" content=\"%s\" />\n", esc_attr($v['ogType']));
-    if ($v['canonical'] !== '') printf("<meta property=\"og:url\" content=\"%s\" />\n", esc_url($v['canonical']));
+    if (!in_array('og', $theme, true)) {
+      printf("<meta property=\"og:type\" content=\"%s\" />\n", esc_attr($v['ogType']));
+      if ($v['canonical'] !== '') printf("<meta property=\"og:url\" content=\"%s\" />\n", esc_url($v['canonical']));
+    }
 
     // Twitter reads og:* for anything not set here.
     $tw_image = $v['twitterImage'] !== '' ? $v['twitterImage'] : $v['ogImage'];

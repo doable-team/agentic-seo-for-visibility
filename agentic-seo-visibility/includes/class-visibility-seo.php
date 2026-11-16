@@ -1015,12 +1015,24 @@ class Visibility_SEO {
     if (defined('SEOPRESS_VERSION')) return new Visibility_SEO_Adapter_SEOPress();
     if (defined('THE_SEO_FRAMEWORK_VERSION') || function_exists('the_seo_framework')) return new Visibility_SEO_Adapter_TSF();
     if (defined('SLIM_SEO_VER')) return new Visibility_SEO_Adapter_SlimSEO();
+    // No SEO plugin: the theme's own SEO fields when it has them (C-41).
+    if (class_exists('Visibility_SEO_Adapter_Theme')) {
+      if (Visibility_SEO_Adapter_Genesis::active()) return new Visibility_SEO_Adapter_Genesis();
+      if (Visibility_SEO_Adapter_Divi::active()) return new Visibility_SEO_Adapter_Divi();
+      if (Visibility_SEO_Adapter_Avada::active()) return new Visibility_SEO_Adapter_Avada();
+    }
     return new Visibility_SEO_Adapter_None();
   }
 
-  /** True when an SEO plugin (any detected one) owns the <head>. */
+  /** True when an SEO plugin (any detected one) owns the <head>. Theme SEO fields are not a plugin. */
   public static function plugin_active() {
-    return self::adapter()->slug() !== null;
+    return !(self::adapter() instanceof Visibility_SEO_Adapter_None);
+  }
+
+  /** Head parts the active theme prints itself (theme SEO fields), else []. */
+  public static function theme_printed() {
+    $a = self::adapter();
+    return $a instanceof Visibility_SEO_Adapter_Theme ? $a->printed() : [];
   }
 
   /** Stored values + what the front end renders, for the read endpoint. */
