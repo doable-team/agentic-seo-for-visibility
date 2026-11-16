@@ -7,6 +7,7 @@
  *   metabox:<field id>       Meta Box
  *   pods:<field name>        Pods
  *   jetengine:<field name>   JetEngine meta boxes (post meta under the field name)
+ *   carbon:<field name>      Carbon Fields post meta containers (name without the "_" prefix)
  *   theme:<theme>:<meta key> theme page options (Astra, GeneratePress, Kadence, OceanWP)
  *   meta:<meta key>          other post meta registered with show_in_rest
  *
@@ -27,6 +28,8 @@ class Visibility_Fields {
   const PODS_WRITABLE = ['text', 'paragraph', 'wysiwyg', 'website', 'email', 'number', 'currency', 'pick', 'boolean', 'phone', 'file'];
   /** JetEngine field types we can write as JetEngine stores them (plain post meta). */
   const JET_WRITABLE = ['text', 'textarea', 'wysiwyg', 'number', 'select', 'radio', 'switcher', 'media'];
+  /** Carbon Fields types written through carbon_set_post_meta() (others read-only). */
+  const CARBON_WRITABLE = ['text', 'textarea', 'rich_text', 'select', 'radio', 'checkbox', 'image', 'file', 'color', 'date', 'time', 'date_time'];
 
   /**
    * Theme page options stored as post meta: theme => [meta key => [label, type, choices|null]].
@@ -112,7 +115,7 @@ class Visibility_Fields {
   public static function schema($type, $post_id = 0) {
     $out = [];
     $seen_meta = [];
-    foreach (['acf', 'metabox', 'pods', 'jetengine'] as $src) {
+    foreach (['acf', 'metabox', 'pods', 'jetengine', 'carbon'] as $src) {
       if (!method_exists(__CLASS__, 'schema_' . $src)) continue;
       foreach (call_user_func([__CLASS__, 'schema_' . $src], $type, $post_id) as $f) {
         if (!empty($f['metaKey'])) $seen_meta[$f['metaKey']] = true;
@@ -271,6 +274,48 @@ class Visibility_Fields {
     return $out;
   }
 
+  /**
+   * Carbon Fields (C-43): fields of the post meta containers shown on this
+   * post type (or this post), from Carbon Fields' own container repository.
+   */
+  public static function carbon_containers() {
+    if (!class_exists('\\Carbon_Fields\\Carbon_Fields') || !function_exists('carbon_get_post_meta')) return [];
+    if (method_exists('\\Carbon_Fields\\Carbon_Fields', 'is_booted') && !\Carbon_Fields\Carbon_Fields::is_booted()) return [];
+    try {
+      $repo = \Carbon_Fields\Carbon_Fields::resolve('container_repository');
+      return is_object($repo) && method_exists($repo, 'get_containers') ? (array) $repo->get_containers('post_meta') : [];
+    } catch (\Throwable $e) {
+      return [];
+    }
+  }
+
+  private static function schema_carbon($type, $post_id) {
+    $out = [];
+    foreach (self::carbon_containers() as $c) {
+      $shown = $post_id && method_exists($c, 'is_valid_attach_for_object') ? $c->is_valid_attach_for_object($post_id)
+        : (method_exists($c, 'get_post_type_visibility') ? in_array($type, (array) $c->get_post_type_visibility(), true) : false);
+      if (!$shown) continue;
+      foreach ((array) $c->get_fields() as $f) {
+        $ftype = (string) $f->get_type();
+        $name = (string) $f->get_base_name();
+        if ($name === '' || in_array($ftype, ['separator', 'html', 'hidden'], true)) continue;
+        $o = ['key' => 'carbon:' . $name, 'label' => (string) $f->get_label(), 'type' => $ftype === 'rich_text' ? 'wysiwyg' : $ftype, 'group' => ($c->title !== '' ? $c->title : 'Carbon Fields') . ' (Carbon Fields)', 'source' => 'carbon', 'metaKey' => (string) $f->get_name(), 'carbonContainer' => (string) $c->id];
+        if ($ftype === 'checkbox') $o['type'] = 'boolean';
+        if (in_array($ftype, ['file', 'image'], true)) {
+          $o['type'] = 'image';
+          if (isset($f->value_type) && $f->value_type !== 'id') $o['readOnly'] = true;
+        }
+        if (method_exists($f, 'get_options') && in_array($ftype, ['select', 'radio'], true)) {
+          $opts = $f->get_options();
+          if (is_array($opts)) $o['choices'] = array_map('strval', array_keys($opts));
+        }
+        if (!in_array($ftype, self::CARBON_WRITABLE, true)) $o['readOnly'] = true;
+        $out[] = $o;
+      }
+    }
+    return $out;
+  }
+
   // ─── Values ────────────────────────────────────────────────────────────
 
   /** Fields of a post with their current values (the read endpoint's `fields`). */
@@ -302,6 +347,10 @@ class Visibility_Fields {
           if (is_array($v) && isset($v['ID'])) return self::image_value((int) $v['ID']);
           if (is_numeric($v)) return self::image_value((int) $v);
         }
+        return $v;
+      case 'carbon':
+        $v = carbon_get_post_meta($post_id, substr($f['key'], 7), $f['carbonContainer'] ?? '');
+        if ($f['type'] === 'image' && is_numeric($v) && $v) return self::image_value((int) $v);
         return $v;
       case 'jetengine':
         $v = get_post_meta($post_id, $f['metaKey'], true);
@@ -465,6 +514,16 @@ class Visibility_Fields {
       case 'pods':
         $r = pods(get_post_type($post_id), $post_id)->save([$f['metaKey'] => $value]);
         return $r ? true : new WP_Error('save_failed', sprintf('Pods did not save %s', $f['key']));
+      case 'carbon':
+        // Through Carbon Fields' own API, so its datastore and value format are used.
+        if ($f['type'] === 'boolean') $value = (bool) $value;
+        if ($value === null) $value = $f['type'] === 'boolean' ? false : '';
+        try {
+          carbon_set_post_meta($post_id, substr($f['key'], 7), $value, $f['carbonContainer'] ?? '');
+        } catch (\Throwable $e) {
+          return new WP_Error('save_failed', 'Carbon Fields did not save ' . $f['key'] . ': ' . $e->getMessage());
+        }
+        return true;
       case 'jetengine':
         // JetEngine keeps each field as plain post meta under its name;
         // switchers as "true"/"false", media (id format) as the attachment id.
@@ -503,6 +562,9 @@ class Visibility_Fields {
       // Writable when its fields can be read from JetEngine's registry or saved config.
       $readable = function_exists('jet_engine') || is_array(get_option('jet_engine_meta_boxes', null));
       $out[] = ['slug' => 'jetengine', 'name' => 'JetEngine', 'version' => $ver, 'writable' => $readable];
+    }
+    if (class_exists('\\Carbon_Fields\\Carbon_Fields') && function_exists('carbon_set_post_meta')) {
+      $out[] = ['slug' => 'carbon-fields', 'name' => 'Carbon Fields', 'version' => defined('\\Carbon_Fields\\VERSION') ? constant('\\Carbon_Fields\\VERSION') : null, 'writable' => true];
     }
     $theme = self::active_theme();
     if ($theme) $out[] = ['slug' => $theme, 'name' => wp_get_theme($theme)->get('Name') . ' page options', 'version' => wp_get_theme($theme)->get('Version'), 'writable' => true, 'theme' => true];
