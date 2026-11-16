@@ -48,8 +48,16 @@ class Visibility_Redirects {
   public static function active_providers() {
     $out = [];
     if (defined('REDIRECTION_VERSION') && class_exists('Red_Item') && class_exists('Red_Group')) $out[] = 'redirection';
-    if (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB')) $out[] = 'rankmath';
+    if (defined('RANK_MATH_VERSION') && class_exists('RankMath\\Redirections\\DB') && self::rankmath_module_on()) $out[] = 'rankmath';
     return $out;
+  }
+
+  /** Rank Math loads its redirect classes only while its Redirections module is on. */
+  private static function rankmath_module_on() {
+    if (class_exists('RankMath\\Helper') && method_exists('RankMath\\Helper', 'is_module_active')) {
+      return (bool) \RankMath\Helper::is_module_active('redirections');
+    }
+    return in_array('redirections', (array) get_option('rank_math_modules', []), true);
   }
 
   /** The provider new redirects go to: the first redirect plugin, else the built-in store. */
