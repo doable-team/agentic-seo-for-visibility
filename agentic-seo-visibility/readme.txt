@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.11.0
+Stable tag: 0.12.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,6 +113,30 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 0.12.0 =
+* **WooCommerce:** agents can read products and product categories and
+  change a product's name, long and short description and address, its
+  image alt text and its SEO fields, and a product category's name,
+  description and SEO. Changes are saved through WooCommerce itself. Prices,
+  stock, SKU, tax, shipping and variations are never changed: any request
+  that touches them is refused before anything is written.
+* **WPML:** every page reports its language and its translations, agents
+  must say which language they are editing, editing a page never touches its
+  translations, and new drafts can be created in a language and linked to
+  the page they translate (also for WooCommerce products with WooCommerce
+  Multilingual). If WPML doesn't offer what the plugin needs, languages are
+  shown read-only instead of guessed.
+* **Divi:** text, headings, blurb and button text, button links and image
+  alt text in Divi 4 modules can be changed on their own; every other module
+  and every design setting stays exactly as it was, and the page still opens
+  in the Divi Builder.
+* **WPBakery:** text blocks, custom headings, buttons, links and image alt
+  text can be changed the same way.
+* **JetEngine:** meta box fields (text, textarea, rich text, number, select,
+  radio, switcher, image) can be read and, when allowed, changed.
+* **WP Rocket, Kinsta and WP Engine:** the changed page's cache is cleared
+  on these too, and only reported as cleared when the purge really ran.
 
 = 0.11.0 =
 * **Change one part of a page.** Agents can now change a single heading,

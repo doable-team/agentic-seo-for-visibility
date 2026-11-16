@@ -108,6 +108,40 @@ All endpoints send `Cache-Control: private, no-store` so page-cache plugins (Lit
 
 ## Changelog (developer notes)
 
+### 0.12.0 (not released yet)
+
+Phase 3 of the WordPress roadmap (doable-team/Visibility-V2#265): paid plugins
+and WooCommerce. Everything in 0.11.0 is unchanged; new abilities are listed in
+`GET /capabilities` `features` (`woocommerce.products`, `terms.update`,
+`multilingual.wpml`, `builder.divi`, `builder.wpbakery`, `fields.jetengine`,
+`cache.host`).
+
+| Issue | Note |
+|---|---|
+| #289 | WooCommerce: `product` on GET /posts/{id} (name, descriptions, slug, images with alt, categories; price/SKU/stock read-only); `product.update {productId, fields:{name, description, shortDescription, slug}}` saved with `wc_get_product()->set_*()->save()`; `term.update {termId, taxonomy: product_cat|product_tag|category|post_tag, fields:{name, slug, description}}`; `GET /terms?taxonomy=` and `GET /terms/{id}` (with SEO); product + product_cat SEO through the SEO adapters. Price, sale price, SKU, stock, tax, shipping, dimensions, attributes and variations are refused (`not_allowed`) on every write path, nothing written. |
+| #290 / #340 | Multilingual providers: Polylang (0.11.0) and WPML. Same `language`/`translations`, `?lang=`, `language_required`/`language_mismatch`, `language` + `translationOf` on create. WPML without the hooks below → `multilingual.writable: false` and creating in a language is refused. |
+| #335 | Divi 4 (shortcodes): `elements` with ids like `et_pb_text-0`; `replace_text` (inner text or `field` title/button_text/…) and `set_attr` (alt, title, href); attribute values stored in Divi's `%22/%91/%93` form; the page is re-parsed and must keep every module and every other byte, else nothing is saved. Divi 5 block layouts: not writable. |
+| #336 | WPBakery: same, `vc_*` modules; image alt in the media library (`vc_single_image` keeps an id); links in `url:…|title:…` form; quotes/brackets refused in attributes. |
+| #337 | JetEngine: `jetengine:<field name>` from its meta boxes; values as JetEngine stores them (plain meta, switcher "true"/"false", media id). |
+| #338 | WP Rocket: `rocket_clean_post()`; counted as purged only when it ran for the post (its `after_rocket_clean_post`). |
+| #339 | Kinsta: `$kinsta_cache->kinsta_cache_purge->initiate_purge()`, purged when the cache server answered 2xx; WP Engine: `WpeCommon::purge_varnish_cache($post_id)`, purged when it returned true. |
+
+#### What each adapter was built from
+
+| Adapter | Built from | Tested against |
+|---|---|---|
+| WooCommerce | WooCommerce CRUD (`WC_Product` getters/setters, `save()`), wordpress.org source | real WooCommerce 11.3 (+ Yoast) — `t7-woocommerce.sh` |
+| WPML | WPML Hooks Reference on wpml.org: `wpml_active_languages`, `wpml_default_language`, `wpml_element_language_details`, `wpml_get_element_translations`, `wpml_object_id`, `wpml_is_translated_post_type`, `wpml_set_element_language_details`, `wpml_switch_language` (scope closed with `null`) | real WPML Multilingual CMS 4.8.0 + String Translation 3.4.0 + WooCommerce Multilingual 5.6.3 (local copies, not shipped) — `t8-wpml.sh` (`WCML=1`) |
+| Polylang Pro / Polylang for WooCommerce | same Polylang API as 0.11.0 | real Polylang Pro 3.3 + Polylang for WooCommerce 1.7 — `t8-polylang.sh` (`PLLWC=1`) |
+| Divi | Elegant Themes' module shortcodes as Divi 4 saves them (`et_pb_*`, `_et_pb_use_builder`, `ET_BUILDER_VERSION`, `ET_Core_PageResource::remove_static_resources`) | real Divi theme 4.21.0 (local copy, not shipped) + AIOSEO — `t4-divi.sh` |
+| WPBakery | WPBakery developer docs (`vc_map` parameters, `WPB_VC_VERSION`, `_wpb_vc_js_status`, `vc_link` format) | stand-in `tests/standins/wpbakery-standin.php` (not the real plugin) — `t5-wpbakery.sh` |
+| JetEngine | JetEngine meta box config (`jet_engine_meta_boxes` option, `jet_engine()->meta_boxes->get_meta_fields_for_object()`), field storage as public JetEngine source shows it | stand-in `tests/standins/jetengine-standin.php` — `t6-jetengine.sh` |
+| WP Rocket | public source github.com/wp-media/wp-rocket (`inc/common/purge.php`: `rocket_clean_post`, its hooks) | stand-in `tests/standins/wp-rocket-standin.php` — `t9-paid-caches.sh`, `t-cache-purge.sh`, `t7-woocommerce.sh` |
+| Kinsta | Kinsta must-use plugin (`cache/class-cache-purge.php`: `initiate_purge`, `KINSTAMU_VERSION`) as used by WP Rocket's Kinsta integration | stand-in `tests/standins/kinsta-standin.php` — `t9-paid-caches.sh` |
+| WP Engine | WP Engine must-use plugin (`WpeCommon::purge_varnish_cache($post_id)`) as used by WP Rocket's WP Engine integration | stand-in `tests/standins/wpengine-standin.php` — `t9-paid-caches.sh` |
+
+Stand-ins live in `tests/standins/` and are never part of the plugin zip.
+
 ### 0.11.0 (not released yet)
 
 Phase 2 of the WordPress roadmap (doable-team/Visibility-V2#265). Every 0.10.0

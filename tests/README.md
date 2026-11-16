@@ -59,4 +59,11 @@ runs WP-CLI against the site, and the plugin copied into each site.
 - `t9-litespeed.sh` — LiteSpeed Cache: the X-LiteSpeed-Purge header tags only the changed post, never `*` (#330).
 - `t9-cloudflare.sh` + `cf-mock.py` — Cloudflare plugin connected (token, zone, APO) against a mocked Cloudflare API: only the changed page's URLs are purged in the site's zone, never everything; a Cloudflare error is not reported as purged; not connected = not listed (#333).
 - `t8-polylang.sh` — Polylang en/fr: language + translations on read, `?lang=`, edits refused without/with the wrong language, the translation untouched when the source is edited, a draft created in a language and linked to its source (T8, #334).
+- Phase 3 (0.12.0). Every script takes `WP`, `PORT_BASE`, `CTR` (docker|podman) and `CPFX` (container prefix) so it runs against another set of sites, e.g. `WP=~/viswp3/wp.sh PORT_BASE=8280 CTR=podman CPFX=viswp3-`.
+  - `t7-woocommerce.sh` — real WooCommerce + Yoast: product words + SEO changed, price/stock/SKU/tax/shipping/variations refused with nothing written, product category text + SEO, rollback, only the product's cache cleared (T7, #289).
+  - `t8-wpml.sh` — real WPML (en/fr): language + translations, `?lang=`, refusals, translation untouched, draft linked as a translation; `WCML=1` adds WooCommerce Multilingual products (T8, #340).
+  - `t8-polylang.sh` `PLLWC=1` — Polylang (Pro) + Polylang for WooCommerce products (#290).
+  - `t4-divi.sh` — real Divi 4: module edits keep every other attribute byte-identical, front end, Visual Builder loads, rollback, AIOSEO title (T4, #335).
+  - `t5-wpbakery.sh` — WPBakery **stand-in** (T5, #336). `t6-jetengine.sh` — JetEngine **stand-in** (#337). `t9-paid-caches.sh` — WP Rocket / Kinsta / WP Engine **stand-ins** (T9, #338, #339).
+  - `standins/` — test-only stand-ins for paid plugins (never shipped).
 - `t1-block-edit.sh` — `post.edit_parts` changes only the target block (text, heading level, alt, href, insert/remove), block template reported, slug-change rules (T1, T11, #285).
