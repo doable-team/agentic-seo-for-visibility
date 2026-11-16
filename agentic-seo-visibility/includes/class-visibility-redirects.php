@@ -496,12 +496,23 @@ class Visibility_Redirects {
     return true;
   }
 
+  /** On a Plain-permalinks site: a request for a path below the site root, which WordPress can't route. */
+  private static function plain_unknown_path($key) {
+    if ((string) get_option('permalink_structure', '') !== '') return false;
+    list(, $home) = self::home_parts();
+    return $key !== self::key($home) && $key !== self::key(rtrim($home, '/') . '/index.php');
+  }
+
   /** Serve the built-in redirects, only where WordPress has no page (404). */
   public static function serve_own() {
-    if (!is_404()) return;
-    $s = get_option(self::STORE, []);
-    if (empty($s['items']) || !isset($_SERVER['REQUEST_URI'])) return;
+    if (!isset($_SERVER['REQUEST_URI'])) return;
     $path = self::key(esc_url_raw(wp_unslash($_SERVER['REQUEST_URI'])));
+    // With "Plain" permalinks WordPress shows the home page for any unknown path
+    // instead of a 404, so there a path other than the site's own root is never a
+    // real page and our redirects may answer it too.
+    if (!is_404() && !self::plain_unknown_path($path)) return;
+    $s = get_option(self::STORE, []);
+    if (empty($s['items'])) return;
     foreach ($s['items'] as $r) {
       if (self::key($r['source']) !== $path) continue;
       if ((int) $r['type'] === 410) {
