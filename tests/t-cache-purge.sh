@@ -1,13 +1,14 @@
 #!/bin/bash
 # #293 (shared part): after a change only the changed post's cache is purged
-# and the result lists the cache. Uses the WP Rocket test stub (mu-plugin that
+# and the result lists the cache. Uses the WP Rocket stand-in (tests/standins, mu-plugin that
 # defines rocket_clean_post and logs each call) on site S; site N has no cache.
 cd "$(dirname "$0")"; . ./lib.sh
 S=${SITE:-1}; N=${NOCACHE_SITE:-4}
-docker cp -q /home/tulasinath/viswp/wp-rocket-stub.php viswp-$S:/var/www/html/wp-content/mu-plugins/wp-rocket-stub.php
+$CTR cp standins/wp-rocket-standin.php ${CPFX}$S:/var/www/html/wp-content/mu-plugins/wp-rocket-standin.php
 A=$($WP $S post create --post_type=page --post_status=publish --post_title="T9 A $RANDOM" --post_content='<!-- wp:paragraph --><p>A text</p><!-- /wp:paragraph -->' --porcelain | tr -d '\r' | tail -1)
 B=$($WP $S post create --post_type=page --post_status=publish --post_title="T9 B $RANDOM" --porcelain | tr -d '\r' | tail -1)
-log() { $WP $S option get vis_test_purges --format=json 2>/dev/null || echo '[]'; }
+# WP Rocket also purges on clean_post_cache, so the revision WordPress saves shows up; revisions aren't pages.
+log() { ($WP $S option get vis_test_purges --format=json 2>/dev/null || echo '[]') | python3 -c "import sys,json; print(json.dumps([x for x in json.load(sys.stdin) if x.get('type')!='revision']))"; }
 $WP $S option delete vis_test_purges >/dev/null 2>&1
 
 check "$(api $S GET /capabilities | jget "d['cachePurge']")" "['wp-rocket']" "capabilities: cachePurge lists wp-rocket"
@@ -30,5 +31,5 @@ check "$(log | jget "sorted(set(x['post'] for x in d))")" "[$A]" "still only pag
 P=$($WP $N post create --post_type=page --post_status=publish --post_title="T9 nocache" --porcelain | tr -d '\r' | tail -1)
 R=$(action $N page.update_content "{\"postId\":$P,\"fields\":{\"title\":\"T9 nocache 2\"}}")
 check "$(echo "$R" | jget "d['result']['cachePurged']")" "[]" "no cache plugin: cachePurged = []"
-docker exec viswp-$S rm -f /var/www/html/wp-content/mu-plugins/wp-rocket-stub.php
+$CTR exec ${CPFX}$S rm -f /var/www/html/wp-content/mu-plugins/wp-rocket-standin.php
 summary

@@ -14,16 +14,31 @@ if (!defined('ABSPATH')) {
 
 class Visibility_Cache {
 
+  /** Posts WP Rocket purged in this request (its after_rocket_clean_post action). */
+  public static $rocket_cleaned = [];
+
+  public static function watch_rocket($post) {
+    if (is_object($post) && isset($post->ID)) self::$rocket_cleaned[(int) $post->ID] = true;
+  }
+
   /**
    * slug => [name, detect, purge]. detect() says the cache is active; purge($post_id, $url)
    * clears it for that post and returns true when it did.
    */
   public static function purgers() {
     $p = [
+      // WP Rocket (#338): rocket_clean_post() removes the post's cache files
+      // (and what WP Rocket ties to it: its archives, feeds, parents). WP
+      // Rocket also runs it on clean_post_cache, once per post per request,
+      // so the save itself may already have purged it; it skips drafts and
+      // autosaves. Purged = after_rocket_clean_post fired for the post.
       'wp-rocket' => [
         'WP Rocket',
         function () { return function_exists('rocket_clean_post'); },
-        function ($id, $url) { rocket_clean_post($id); return true; },
+        function ($id, $url) {
+          if (rocket_clean_post($id) === true) return true;
+          return isset(Visibility_Cache::$rocket_cleaned[(int) $id]);
+        },
       ],
       // WP Super Cache: the post's own page (and what WPSC ties to it).
       'wp-super-cache' => [
@@ -76,6 +91,27 @@ class Visibility_Cache {
           return sg_cachepress_purge_cache($url) !== false;
         },
       ],
+      // Kinsta (#339): the host's must-use plugin purges the post's URLs on
+      // its cache server through $kinsta_cache->kinsta_cache_purge->initiate_purge()
+      // (the call WP Rocket's own Kinsta integration makes after rocket_clean_post).
+      'kinsta' => [
+        'Kinsta cache',
+        function () { return Visibility_Cache::kinsta_purger() !== null; },
+        function ($id, $url) {
+          // Kinsta only caches public pages; its purge doesn't check the status itself.
+          if (get_post_status($id) !== 'publish') return false;
+          $r = Visibility_Cache::kinsta_purger()->initiate_purge($id);
+          $code = is_array($r) && isset($r['response']['immediate']['response_code']) ? (int) $r['response']['immediate']['response_code'] : 0;
+          return $code >= 200 && $code < 300;
+        },
+      ],
+      // WP Engine (#339): the platform plugin's WpeCommon::purge_varnish_cache($post_id)
+      // purges the post's own paths on the page cache; true when it purged.
+      'wpengine' => [
+        'WP Engine cache',
+        function () { return class_exists('WpeCommon') && method_exists('WpeCommon', 'purge_varnish_cache'); },
+        function ($id, $url) { return \WpeCommon::purge_varnish_cache((int) $id) === true; },
+      ],
       // Cloudflare (official plugin, incl. APO): purge the post's URLs through
       // the plugin's own API client, only when the plugin is connected.
       'cloudflare' => [
@@ -88,6 +124,13 @@ class Visibility_Cache {
      * Add a purger: $purgers['slug'] = [name, detect callable, purge callable($post_id, $url)].
      */
     return apply_filters('visibility_cache_purgers', $p);
+  }
+
+  /** Kinsta's purge object when the Kinsta must-use plugin is loaded with selective purging. */
+  public static function kinsta_purger() {
+    if (!defined('KINSTAMU_VERSION') || empty($GLOBALS['kinsta_cache']) || !is_object($GLOBALS['kinsta_cache'])) return null;
+    $p = isset($GLOBALS['kinsta_cache']->kinsta_cache_purge) ? $GLOBALS['kinsta_cache']->kinsta_cache_purge : null;
+    return (is_object($p) && method_exists($p, 'initiate_purge')) ? $p : null;
   }
 
   // ─── Cloudflare ────────────────────────────────────────────────────────
@@ -169,3 +212,5 @@ class Visibility_Cache {
     return array_values(array_unique($done));
   }
 }
+
+add_action('after_rocket_clean_post', ['Visibility_Cache', 'watch_rocket']);
