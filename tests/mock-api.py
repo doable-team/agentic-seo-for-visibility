@@ -37,7 +37,7 @@ class H(BaseHTTPRequestHandler):
         with lock:
             s = load()
             if self.path.endswith("/heartbeat"):
-                s.setdefault("heartbeats", []).append(body); save(s)
+                s.setdefault("heartbeats", []).append(body); s["heartbeatAuth"] = self.headers.get("Authorization", ""); save(s)
                 return self.send(200, s.get("heartbeat", {"siteId": "test-site-1"}))
             if self.path.endswith("/execution-result"):
                 rid = self.path.split("/requests/")[1].split("/")[0]

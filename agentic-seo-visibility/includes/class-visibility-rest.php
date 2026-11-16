@@ -87,6 +87,14 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
 
+    // Key rotation (#296): a new site token, valid alongside the old one
+    // until Visibility first uses it.
+    register_rest_route('visibility/v1', '/auth/rotate', [
+      'methods'             => 'POST',
+      'callback'            => [$this, 'rotate_key'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // Posts
     register_rest_route('visibility/v1', '/posts', [
       [
@@ -204,17 +212,14 @@ class Visibility_REST {
     ]);
   }
 
-  /** Constant-time bearer-token check against the option stored at pairing. */
+  /**
+   * The site token (Bearer) and, from 2.0.0, the request signature (#296):
+   * see Visibility_Auth. Bearer-only requests keep working until signatures
+   * are required.
+   */
   public function authenticate($request) {
-    $header = $request->get_header('authorization');
-    if (!$header || stripos($header, 'Bearer ') !== 0) {
-      return new WP_Error('visibility_no_auth', __('Missing bearer token.', 'agentic-seo-visibility'), ['status' => 401]);
-    }
-    $token  = trim(substr($header, 7));
-    $stored = Visibility_Client::site_token();
-    if ($stored === '' || !hash_equals($stored, $token)) {
-      return new WP_Error('visibility_bad_token', __('Invalid site token.', 'agentic-seo-visibility'), ['status' => 401]);
-    }
+    $auth = Visibility_Auth::check($request);
+    if ($auth !== true) return $auth;
     // Quiet sites (#280): a call from Visibility starts a late backup tick.
     Visibility_Requests::catch_up_if_late();
     return true;
@@ -288,6 +293,13 @@ class Visibility_REST {
       'pausedBy'     => Visibility_Policy::paused_by(),
       'controls'     => Visibility_Policy::controls(),
     ]);
+  }
+
+  /** POST /auth/rotate {requireSignature?: bool} */
+  public function rotate_key(WP_REST_Request $request) {
+    $body = $request->get_json_params();
+    $req = is_array($body) && array_key_exists('requireSignature', $body) && $body['requireSignature'] !== null ? (bool) $body['requireSignature'] : null;
+    return rest_ensure_response(Visibility_Auth::rotate($req));
   }
 
   public function capabilities(WP_REST_Request $request) {

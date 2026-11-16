@@ -58,6 +58,8 @@ class Visibility_Client {
     }
 
     update_option('visibility_site_token', $body['siteToken'], false);
+    // A fresh pairing starts without a half-done key rotation.
+    delete_option(Visibility_Auth::PENDING);
     update_option('visibility_project_id', $body['projectId'], false);
     update_option('visibility_project_name', isset($body['projectName']) ? (string) $body['projectName'] : '', false);
     update_option('visibility_company_id', $body['companyId'] ?? '', false);
@@ -106,6 +108,7 @@ class Visibility_Client {
       ]);
     }
     delete_option('visibility_site_token');
+    Visibility_Auth::forget();
     delete_option('visibility_site_id');
     delete_option('visibility_project_id');
     delete_option('visibility_project_name');

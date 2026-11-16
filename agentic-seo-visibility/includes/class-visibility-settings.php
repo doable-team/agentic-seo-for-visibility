@@ -24,6 +24,7 @@ class Visibility_Settings {
     add_action('admin_post_visibility_disconnect', [$this, 'handle_disconnect']);
     add_action('admin_post_visibility_author', [$this, 'handle_author']);
     add_action('admin_post_visibility_pause', [$this, 'handle_pause']);
+    add_action('admin_post_visibility_signing', [$this, 'handle_signing']);
   }
 
   /** Build the nonce-protected query args for a redirect-after-action.
@@ -142,6 +143,18 @@ class Visibility_Settings {
     $on = isset($_POST['visibility_pause']) && sanitize_key(wp_unslash($_POST['visibility_pause'])) === 'on';
     Visibility_Policy::set_wp_pause($on);
     wp_safe_redirect(add_query_arg($this->get_notice_query_args($on ? 'paused' : 'resumed'), admin_url('admin.php')));
+    exit;
+  }
+
+  /** Require signed requests from Visibility (#296). */
+  public function handle_signing() {
+    if (!current_user_can('manage_options')) {
+      wp_die(esc_html__('Permission denied.', 'agentic-seo-visibility'));
+    }
+    check_admin_referer('visibility_signing');
+    $on = isset($_POST['visibility_require_signature']) && sanitize_key(wp_unslash($_POST['visibility_require_signature'])) === '1';
+    Visibility_Auth::set_required($on);
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args('signing_saved'), admin_url('admin.php')));
     exit;
   }
 
@@ -270,6 +283,8 @@ class Visibility_Settings {
         <div class="notice notice-warning"><p><?php echo esc_html__('Paused. Visibility can no longer change this site.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'resumed') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Resumed.', 'agentic-seo-visibility'); ?></p></div>
+      <?php elseif ($status === 'signing_saved') : ?>
+        <div class="notice notice-success"><p><?php echo esc_html__('Connection security saved.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'author_saved') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Default author saved.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'error') : ?>
@@ -368,6 +383,18 @@ class Visibility_Settings {
               <?php echo esc_html__('Open Visibility dashboard', 'agentic-seo-visibility'); ?>
             </a>
           </p>
+
+          <hr style="margin:28px 0" />
+          <form method="post" action="<?php echo esc_url($action_url); ?>" id="visibility-signing">
+            <?php wp_nonce_field('visibility_signing'); ?>
+            <input type="hidden" name="action" value="visibility_signing" />
+            <label>
+              <input type="checkbox" name="visibility_require_signature" value="1" <?php checked(Visibility_Auth::required()); ?> />
+              <?php echo esc_html__('Only accept signed requests from Visibility', 'agentic-seo-visibility'); ?>
+            </label>
+            <p class="description"><?php echo esc_html__('Visibility signs every request with the connection key, a timestamp and a one-time number, so a copied request cannot be replayed. Turn this on once your Visibility app signs requests; requests with only the key are then refused. Visibility can also rotate the key from its settings.', 'agentic-seo-visibility'); ?></p>
+            <p><button type="submit" class="button"><?php echo esc_html__('Save', 'agentic-seo-visibility'); ?></button></p>
+          </form>
 
           <hr style="margin:28px 0" />
           <form method="post" action="<?php echo esc_url($action_url); ?>" onsubmit="return confirm('<?php echo esc_js(__('Disconnect this site from Visibility?', 'agentic-seo-visibility')); ?>')">
