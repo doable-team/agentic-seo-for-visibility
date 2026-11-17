@@ -60,7 +60,8 @@ class Visibility_Policy {
     'tag.update'            => 'edit_meta',
     'fields.update'         => 'edit_fields',
     'product.update'        => 'edit_content',
-    'term.update'           => 'edit_meta',
+    // A category's name, address and description are its content, like a product's.
+    'term.update'           => 'edit_content',
     'media.upload_from_url' => 'images',
     'media.update_meta'     => 'images',
     'media.bulk_alt'        => 'images',
