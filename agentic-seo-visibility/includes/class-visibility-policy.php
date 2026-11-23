@@ -249,7 +249,46 @@ class Visibility_Policy {
     if (self::controls() === null) return null;
     list($needed, $post_id, $type) = self::needs_for_action($action_type, $payload);
     if ($needed === null) return null;
-    return self::check_controls($needed, $post_id, $type);
+    $refused = self::check_controls($needed, $post_id, $type);
+    if ($refused) return $refused;
+    // A redirect from a locked page's address changes that page for visitors (#464).
+    if ($action_type === 'redirect.create' || $action_type === 'redirect.delete') {
+      $source = $action_type === 'redirect.create'
+        ? (isset($payload['source']) ? $payload['source'] : (isset($payload['fromPath']) ? $payload['fromPath'] : ''))
+        : (class_exists('Visibility_Redirects') ? Visibility_Redirects::source_of(isset($payload['redirectId']) ? (string) $payload['redirectId'] : '') : '');
+      $locked = self::locked_at_address($source);
+      if ($locked) {
+        return ['locked', sprintf('"%s" is locked by the site owner; agents may not redirect its address.', $locked->post_title !== '' ? $locked->post_title : '#' . $locked->ID)];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The locked post whose address (current, or an old slug WordPress still
+   * sends to it) is $address, or null.
+   */
+  public static function locked_at_address($address) {
+    $c = self::controls();
+    if ($c === null || empty($c['lockedPostIds']) || !class_exists('Visibility_Redirects')) return null;
+    $path = Visibility_Redirects::to_path((string) $address);
+    if ($path === null || $path === '') return null;
+    $key = Visibility_Redirects::key($path);
+    $h = wp_parse_url(home_url('/'));
+    $id = (int) url_to_postid((isset($h['scheme']) ? $h['scheme'] : 'http') . '://' . $h['host'] . (isset($h['port']) ? ':' . $h['port'] : '') . $path);
+    $last = basename($key);
+    foreach ($c['lockedPostIds'] as $locked_id) {
+      $post = get_post((int) $locked_id);
+      if (!$post) continue;
+      if ($id === (int) $post->ID) return $post;
+      $link = get_permalink($post);
+      $own = $link ? Visibility_Redirects::to_path($link) : null;
+      if ($own !== null && Visibility_Redirects::key($own) === $key) return $post;
+      foreach ((array) get_post_meta($post->ID, '_wp_old_slug') as $old) {
+        if ($old !== '' && $last === strtolower((string) $old)) return $post;
+      }
+    }
+    return null;
   }
 
   /** [controls needed, post id, post type for creates]. */

@@ -89,6 +89,12 @@ R=$(action $S redirect.create "{\"source\":\"/t10-no-$N/\",\"target\":\"/\"}")
 check "$(code "$R")" "not_allowed" "redirects not allowed by the owner -> refused"
 R=$(action $S page.update_content "{\"postId\":$P,\"fields\":{\"slug\":\"t10-noredir-$N\"}}")
 check "$(echo "$R" | jget "('redirectAdded' in d['result'], 'not allowed' in d['result'].get('redirectSkipped',''))")" "(False, True)" "slug change without the redirects switch: redirectSkipped says why"
+# A locked page (#464): its address can't be redirected, the page stays live.
+api $S POST /events/site-config-changed "{\"controls\":{\"actions\":[\"redirects\"],\"postTypes\":[\"post\",\"page\"],\"lockedPostIds\":[$T],\"fieldAllowlist\":[]}}" >/dev/null
+R=$(action $S redirect.create "{\"source\":\"/t10-target-$N/\",\"target\":\"https://evil.example/landing\",\"type\":301}")
+check "$(code "$R")" "locked" "locked page: redirect.create from its address -> locked"
+sleep 1
+check "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/t10-target-$N/")" "200" "locked page still answers 200"
 api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
 
 if [ "$EXPECT" = redirection ]; then

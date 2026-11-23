@@ -341,6 +341,18 @@ class Visibility_Redirects {
     return $r;
   }
 
+  /** The source address of redirect $id in any store, or '' (#464: a lock check before deleting it). */
+  public static function source_of($id) {
+    $id = (string) $id;
+    if ($id === '') return '';
+    $providers = preg_match('/^v\d+$/', $id) ? ['visibility'] : array_unique(array_merge(self::active_providers(), ['visibility']));
+    foreach ($providers as $p) {
+      $r = self::find_id($p, $id);
+      if ($r) return $r['regex'] ? '' : (string) $r['source'];
+    }
+    return '';
+  }
+
   /** @return array|WP_Error the deleted redirect */
   public static function delete($id, $provider = null) {
     $id = (string) $id;

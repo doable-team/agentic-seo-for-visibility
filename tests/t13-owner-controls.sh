@@ -50,6 +50,38 @@ R=$(action $S post.update_meta "{\"postId\":$LIVE,\"fields\":{\"featuredMediaId\
 check "$(echo "$R" | jget "['ok']")" "True" "featured image only = images control -> allowed"
 check "$(http POST /media "{\"source_url\":\"http://localhost/vis-test-og.png\",\"post_id\":$D}")" "200" "POST /media for Visibility's draft allowed"
 
+# A locked page's address can't be redirected away, even with redirects allowed (#464).
+LSLUG=$($WP $S post get $LOCK --field=post_name | tr -d '\r')
+LIVESLUG=$($WP $S post get $LIVE --field=post_name | tr -d '\r')
+api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
+R=$(action $S redirect.create "{\"source\":\"/$LIVESLUG-old-$RANDOM/\",\"target\":\"/\"}")
+OLDRID=$(echo "$R" | jget "d['result']['redirectId']")
+api $S POST /events/site-config-changed "{\"controls\":{\"actions\":[\"create_drafts\",\"redirects\"],\"postTypes\":[\"post\",\"page\"],\"lockedPostIds\":[$LOCK],\"fieldAllowlist\":[]}}" >/dev/null
+R=$(action $S redirect.create "{\"source\":\"/$LSLUG/\",\"target\":\"https://evil.example/landing\",\"type\":301}")
+check "$(code "$R")" "locked" "locked page: redirect.create from its address refused"
+R=$(action $S redirect.create "{\"source\":\"http://localhost:$((PORT_BASE+S))/$LSLUG\",\"target\":\"/\"}")
+check "$(code "$R")" "locked" "locked page: same address as a full URL without the slash refused"
+check "$(api $S GET "/redirects?source=/$LSLUG/" | jget "d['total']")" "0" "no redirect was added for the locked page"
+check "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$((PORT_BASE+S))/$LSLUG/")" "200" "locked page still answers 200"
+# Its old address (an old slug WordPress still sends to it) is protected too.
+$WP $S post meta add $LOCK _wp_old_slug "t13-protect-$LOCK" >/dev/null
+R=$(action $S redirect.create "{\"source\":\"/t13-protect-$LOCK/\",\"target\":\"/\"}")
+check "$(code "$R")" "locked" "locked page: its old slug can't be redirected either"
+# A redirect that protects a locked page can't be deleted; an unrelated one can.
+api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
+PRID=$(action $S redirect.create "{\"source\":\"/t13-protect-$LOCK/\",\"target\":\"/$LSLUG/\"}" | jget "d['result']['redirectId']")
+api $S POST /events/site-config-changed "{\"controls\":{\"actions\":[\"create_drafts\",\"redirects\"],\"postTypes\":[\"post\",\"page\"],\"lockedPostIds\":[$LOCK],\"fieldAllowlist\":[]}}" >/dev/null
+R=$(action $S redirect.delete "{\"redirectId\":\"$PRID\"}")
+check "$(code "$R")" "locked" "redirect.delete of a redirect on a locked page's old address refused"
+R=$(action $S redirect.delete "{\"redirectId\":\"$OLDRID\"}")
+check "$(echo "$R" | jget "d['ok']")" "True" "redirect.delete of an unrelated redirect allowed"
+R=$(action $S redirect.create "{\"source\":\"/t13-free-$RANDOM/\",\"target\":\"/\"}")
+check "$(echo "$R" | jget "d['ok']")" "True" "redirects on: an address that isn't a locked page works"
+$WP $S post meta delete $LOCK _wp_old_slug "t13-protect-$LOCK" >/dev/null
+api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
+action $S redirect.delete "{\"redirectId\":\"$PRID\"}" >/dev/null
+api $S POST /events/site-config-changed "{\"controls\":$CTL}" >/dev/null
+
 # Content types.
 api $S POST /events/site-config-changed "{\"controls\":{\"actions\":[\"create_drafts\",\"edit_meta\",\"images\",\"edit_content\"],\"postTypes\":[\"post\"],\"lockedPostIds\":[],\"fieldAllowlist\":[]}}" >/dev/null
 R=$(action $S page.create_draft '{"title":"T13 page"}')

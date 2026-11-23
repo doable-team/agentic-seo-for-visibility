@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -117,6 +117,12 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 2.1.1 =
+* **Locked pages can't be redirected away.** When you lock a page, an agent
+  can no longer add a redirect from its address (or from an old address that
+  still leads to it), and can't delete a redirect that keeps an old address
+  of a locked page working. Redirects for other addresses work as before.
 
 = 2.1.0 =
 * **Agents can see all of a page's custom data.** Reading a page now lists
