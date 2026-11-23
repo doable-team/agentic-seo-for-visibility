@@ -330,6 +330,8 @@ class Visibility_Fields {
 
   public static function get_value($post_id, array $f) {
     switch ($f['source']) {
+      case 'rawmeta':
+        return Visibility_Meta::value($post_id, $f['metaKey']);
       case 'acf':
         $v = get_field(substr($f['key'], 4), $post_id, false);
         if ($f['type'] === 'image' && $v) return self::image_value((int) $v);
@@ -389,6 +391,15 @@ class Visibility_Fields {
       $key = (string) $key;
       $parts = explode(':', $key);
       if (self::denied(end($parts))) return new WP_Error('not_allowed', sprintf('Field %s can never be changed by Visibility.', $key));
+      if (!isset($schema[$key]) && strpos($key, 'meta:') === 0 && class_exists('Visibility_Meta')) {
+        // 2.1.0: any post meta of the post (protected or not registered for
+        // REST) when the owner allows it; never a key the post doesn't have
+        // unless it is registered.
+        $p = Visibility_Meta::prepare($post, substr($key, 5), $value, false);
+        if (is_wp_error($p)) return $p;
+        $plan[$key] = [['key' => $key, 'source' => 'rawmeta', 'metaKey' => $p['key'], 'type' => $p['type']], $p];
+        continue;
+      }
       if (!isset($schema[$key])) {
         // Unknown on this post. Never write arbitrary keys.
         if (!Visibility_Policy::field_allowed($key)) return new WP_Error('not_allowed', sprintf('Field %s is not in the owner\'s allowlist.', $key));
@@ -502,6 +513,8 @@ class Visibility_Fields {
 
   private static function write($post_id, array $f, $value) {
     switch ($f['source']) {
+      case 'rawmeta':
+        return Visibility_Meta::apply($post_id, $value);
       case 'acf':
         // update_field() returns false for group/repeater fields even when it
         // saved, and when the value is unchanged: check by reading back.

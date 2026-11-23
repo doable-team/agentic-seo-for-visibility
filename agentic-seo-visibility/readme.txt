@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.1
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -117,6 +117,27 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 2.1.0 =
+* **Agents can see all of a page's custom data.** Reading a page now lists
+  every meta value stored with it, not only the registered ones, so an agent
+  can tell what your plugins keep there. Passwords, keys, tokens and similar
+  secrets are never shown, page builder data is shown only as its size, and
+  long values are shortened.
+* **Changing that data needs your permission.** An agent can change a
+  page's meta value only when you allow that exact field in Visibility, or
+  turn on "any custom data" for the site (off unless you turn it on). Secrets,
+  SEO plugin fields and page builder data are never changed this way, values
+  are checked against the type the field was registered with, and every
+  change can be rolled back like the others.
+* **Your own SEO plugin is used, even one Visibility doesn't know.** When a
+  plugin keeps SEO title, description, keywords, canonical and robots as
+  registered post meta under one prefix, Visibility writes its SEO changes
+  into those fields and leaves the tags to that plugin, so nothing is printed
+  twice.
+* **Check that a page is properly in blocks.** Reading a page's blocks now
+  also says how many parts sit outside any block and points out block types
+  that are not installed or block markup that does not close.
 
 = 2.0.1 =
 * Changing a category's or tag's name, address or description now needs

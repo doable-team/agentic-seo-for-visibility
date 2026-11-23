@@ -12,7 +12,7 @@
  *   visibility_paused_wp      '1' = paused with the Pause button in WordPress.
  *                             Only WordPress sets or clears it; Visibility's
  *                             `disabled` never touches it.
- *   visibility_controls       {actions, postTypes, lockedPostIds, fieldAllowlist}.
+ *   visibility_controls       {actions, postTypes, lockedPostIds, fieldAllowlist, anyPostMeta}.
  *                             Never received = no limits beyond the two flags
  *                             above (0.10.0 behaviour), so older apps keep
  *                             working. Once received, it is enforced.
@@ -59,6 +59,7 @@ class Visibility_Policy {
     'tag.create'            => 'edit_meta',
     'tag.update'            => 'edit_meta',
     'fields.update'         => 'edit_fields',
+    'meta.update'           => 'edit_fields',
     'product.update'        => 'edit_content',
     // A category's name, address and description are its content, like a product's.
     'term.update'           => 'edit_content',
@@ -112,7 +113,7 @@ class Visibility_Policy {
   public static function controls() {
     $c = get_option('visibility_controls', null);
     if (!is_array($c)) return null;
-    return $c + ['actions' => [], 'postTypes' => [], 'lockedPostIds' => [], 'fieldAllowlist' => []];
+    return $c + ['actions' => [], 'postTypes' => [], 'lockedPostIds' => [], 'fieldAllowlist' => [], 'anyPostMeta' => false];
   }
 
   /** Store flags and controls from a server message (absent keys are left alone). */
@@ -140,6 +141,8 @@ class Visibility_Policy {
       'postTypes'      => array_values(array_unique(array_filter(array_map('sanitize_key', array_map('strval', $list($c['postTypes'] ?? [])))))),
       'lockedPostIds'  => array_values(array_unique(array_filter(array_map('intval', $list($c['lockedPostIds'] ?? []))))),
       'fieldAllowlist' => array_values(array_unique(array_filter(array_map(function ($k) { return is_scalar($k) ? substr(trim((string) $k), 0, 200) : ''; }, $list($c['fieldAllowlist'] ?? []))))),
+      // 2.1.0: "any post meta except the protected list" (meta.update). Off unless sent as true.
+      'anyPostMeta'    => !empty($c['anyPostMeta']) && $c['anyPostMeta'] !== 'false',
     ];
   }
 
@@ -148,6 +151,24 @@ class Visibility_Policy {
     $c = self::controls();
     if ($c === null) return false;
     return in_array((string) $key, $c['fieldAllowlist'], true);
+  }
+
+  /** The owner's "any post meta" mode (controls.anyPostMeta, or "meta:*" in the allowlist). Off by default. */
+  public static function any_post_meta() {
+    $c = self::controls();
+    if ($c === null) return false;
+    return !empty($c['anyPostMeta']) || in_array('meta:*', $c['fieldAllowlist'], true);
+  }
+
+  /**
+   * True when meta.update may write post meta $meta_key: the allowlist names
+   * "meta:<key>", or the owner turned on "any post meta" and the key already
+   * exists on the post or is registered ($known). Keys that can never be
+   * written (secrets, SEO plugins', builders') are refused before this.
+   */
+  public static function meta_allowed($meta_key, $known = true) {
+    if (self::field_allowed('meta:' . $meta_key)) return true;
+    return $known && self::any_post_meta();
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────

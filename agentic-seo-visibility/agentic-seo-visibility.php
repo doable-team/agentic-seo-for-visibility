@@ -3,7 +3,7 @@
  * Plugin Name: Agentic SEO for Visibility
  * Plugin URI: https://visibility.so
  * Description: Connect your WordPress site to Visibility (https://app.visibility.so) so the AI agents in your Visibility project can read, draft and improve your content. Pair once with a short code; every publish and every change to a live page is approved by a person in Visibility first.
- * Version: 2.0.1
+ * Version: 2.1.0
  * Author: rankth
  * Author URI: https://visibility.so
  * License: GPL v2 or later
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
   exit;
 }
 
-define('VISIBILITY_PLUGIN_VERSION', '2.0.1');
+define('VISIBILITY_PLUGIN_VERSION', '2.1.0');
 define('VISIBILITY_PLUGIN_FILE', __FILE__);
 define('VISIBILITY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
@@ -37,6 +37,7 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-changes.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-cache.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-author.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-fields.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-meta.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builders.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builder-elementor.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-builder-shortcodes.php';
@@ -52,6 +53,7 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-executor.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-requests.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-theme.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-custom.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-read.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-media.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-head.php';

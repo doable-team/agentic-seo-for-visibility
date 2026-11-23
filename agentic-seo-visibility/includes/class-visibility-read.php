@@ -295,10 +295,13 @@ class Visibility_Read {
         'termSeo'    => $seo->writable() && !empty($seo->term_fields()),
         'termFields' => $seo->writable() ? $seo->term_fields() : [],
         'schema'     => $seo->writable(),
-        'renderedBy' => $seo->slug() === null ? 'visibility' : $seo->slug(),
-        'theme'      => $seo instanceof Visibility_SEO_Adapter_Theme,
-        'themePrints' => $seo instanceof Visibility_SEO_Adapter_Theme ? $seo->printed() : [],
+        'renderedBy' => $seo->slug() === null ? 'visibility' : ($seo instanceof Visibility_SEO_Adapter_Custom ? $seo->rendered_by() : $seo->slug()),
+        'theme'      => $seo instanceof Visibility_SEO_Adapter_Theme && !($seo instanceof Visibility_SEO_Adapter_Custom),
+        'themePrints' => $seo instanceof Visibility_SEO_Adapter_Custom ? $seo->describe()['prints'] : ($seo instanceof Visibility_SEO_Adapter_Theme ? $seo->printed() : []),
       ],
+      // 2.1.0: the SEO plugin in one place; "custom" = one found by its registered meta.
+      'seoPlugin'     => $seo instanceof Visibility_SEO_Adapter_Custom ? $seo->describe()
+        : ($seo->slug() === null || $seo instanceof Visibility_SEO_Adapter_Theme ? null : ['slug' => $seo->slug(), 'name' => $seo->name(), 'prefix' => null, 'fields' => new stdClass()]),
       'builders'      => $builders,
       'customFields'  => $custom_fields,
       'redirects'     => $redirects,
@@ -321,7 +324,7 @@ class Visibility_Read {
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ] + Visibility_Requests::describe(),
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver', 'builder.read', 'seo.theme', 'multilingual.translatepress', 'fields.carbon'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver', 'builder.read', 'seo.theme', 'multilingual.translatepress', 'fields.carbon', 'meta.inventory', 'meta.write', 'seo.custom', 'blocks.summary'],
     ];
   }
 }

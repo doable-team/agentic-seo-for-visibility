@@ -1015,6 +1015,12 @@ class Visibility_SEO {
     if (defined('SEOPRESS_VERSION')) return new Visibility_SEO_Adapter_SEOPress();
     if (defined('THE_SEO_FRAMEWORK_VERSION') || function_exists('the_seo_framework')) return new Visibility_SEO_Adapter_TSF();
     if (defined('SLIM_SEO_VER')) return new Visibility_SEO_Adapter_SlimSEO();
+    // An SEO plugin we don't know that keeps its fields as registered post
+    // meta (title, description, keyword, canonical, robots under one prefix).
+    if (class_exists('Visibility_SEO_Adapter_Custom')) {
+      $family = Visibility_SEO_Adapter_Custom::site_family();
+      if ($family) return new Visibility_SEO_Adapter_Custom($family);
+    }
     // No SEO plugin: the theme's own SEO fields when it has them (C-41).
     if (class_exists('Visibility_SEO_Adapter_Theme')) {
       if (Visibility_SEO_Adapter_Genesis::active()) return new Visibility_SEO_Adapter_Genesis();
@@ -1045,11 +1051,17 @@ class Visibility_SEO {
     $a = self::adapter();
     $values = $a->read($post_id);
     if (class_exists('Visibility_Schema')) $values['schemaJsonLd'] = Visibility_Schema::get($post_id);
-    return [
+    $out = [
       'plugin'          => $a->slug(),
       'values'          => $values,
       'rendered'        => $with_rendered ? $a->rendered($post_id) : null,
       'supportedFields' => $a->writable() ? $a->fields() : [],
     ];
+    // An SEO plugin found by its registered meta: its keys and what they hold now.
+    if ($a instanceof Visibility_SEO_Adapter_Custom) {
+      $out['custom'] = $a->raw($post_id);
+      $out['renderedBy'] = $a->rendered_by();
+    }
+    return $out;
   }
 }

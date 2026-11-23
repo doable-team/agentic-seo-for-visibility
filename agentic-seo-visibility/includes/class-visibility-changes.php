@@ -466,7 +466,8 @@ class Visibility_Changes {
     // rebuild a cache on their own save path (Yoast indexables).
     if ($seo && class_exists('Visibility_SEO')) {
       $adapter = Visibility_SEO::adapter();
-      if ($adapter->writable()) {
+      // A custom SEO plugin keeps everything in post meta, restored exactly above.
+      if ($adapter->writable() && !($adapter instanceof Visibility_SEO_Adapter_Custom)) {
         unset($seo['schemaJsonLd']);
         if ($seo) $adapter->write($post_id, $seo);
       }

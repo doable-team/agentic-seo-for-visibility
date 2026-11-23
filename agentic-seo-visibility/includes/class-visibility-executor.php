@@ -148,6 +148,7 @@ class Visibility_Executor {
       'redirect.delete'        => 'exec_redirect_delete',
       'change.rollback'        => 'exec_change_rollback',
       'fields.update'          => 'exec_fields_update',
+      'meta.update'            => 'exec_meta_update',
       'product.update'         => 'exec_product_update',
       'term.update'            => 'exec_term_update',
     ];
@@ -622,6 +623,8 @@ class Visibility_Executor {
       return self::fail('unsupported', sprintf('%s is active on this site; Visibility cannot write its fields yet.', $adapter->name()));
     }
     $before = Visibility_SEO::read_post($post_id, false)['values'];
+    // "primary, second" in focusKeyword -> primary + secondaryKeywords, where the adapter keeps a keyword list.
+    if (method_exists($adapter, 'normalize')) $fields = $adapter->normalize($fields);
 
     $res = $adapter->write($post_id, $fields);
     if (is_wp_error($res)) return self::fail('save_failed', $res->get_error_message());
@@ -655,6 +658,7 @@ class Visibility_Executor {
     ];
     if ($notes) $result['notes'] = $notes;
     if ($adapter->slug() === null) $result['renderedBy'] = 'visibility';
+    if ($adapter instanceof Visibility_SEO_Adapter_Custom) $result['renderedBy'] = $adapter->rendered_by();
     return [true, $result, null];
   }
 
@@ -696,6 +700,10 @@ class Visibility_Executor {
     if (in_array($field, ['robotsNoindex', 'robotsNofollow', 'cornerstone'], true)) return (bool) $asked === (bool) $stored;
     if ($field === 'primaryCategory') return (int) $asked === (int) $stored;
     if ($field === 'schemaJsonLd' || $field === 'advancedRobots') return true;
+    if ($field === 'secondaryKeywords') {
+      $want = array_values(array_filter(array_map(function ($k) { return sanitize_text_field(str_replace(',', ' ', (string) $k)); }, is_array($asked) ? $asked : explode(',', (string) $asked)), 'strlen'));
+      return $want === array_values((array) $stored);
+    }
     $want = in_array($field, ['canonical', 'ogImage', 'twitterImage'], true)
       ? (($asked === null || $asked === '') ? '' : esc_url_raw((string) $asked))
       : ($asked === null ? '' : sanitize_text_field((string) $asked));
@@ -730,6 +738,25 @@ class Visibility_Executor {
     $r = Visibility_Fields::update($post_id, $values);
     if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
     return [true, ['postId' => $post_id, 'fields' => $r['fields'], 'before' => (object) $r['before'], 'after' => (object) $r['after'], 'modifiedGmt' => Visibility_Content::modified_gmt($post_id)], null];
+  }
+
+  /**
+   * {postId, meta:{key: value}, modifiedGmt?} (2.1.0): any post meta the
+   * owner allows (fieldAllowlist "meta:<key>", or "any post meta"), never
+   * secrets, SEO plugins' or builders' keys; value checked against the
+   * registered type; null deletes the key. All or nothing.
+   */
+  private static function exec_meta_update($payload) {
+    $post_id = intval($payload['postId'] ?? 0);
+    if (!$post_id) return self::fail('invalid', 'postId required');
+    if (!get_post($post_id)) return self::fail('not_found', 'post not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
+    }
+    $values = isset($payload['meta']) && is_array($payload['meta']) ? $payload['meta'] : [];
+    $r = Visibility_Meta::update($post_id, $values);
+    if (is_wp_error($r)) return self::fail($r->get_error_code(), $r->get_error_message());
+    return [true, ['postId' => $post_id, 'meta' => $r['meta'], 'before' => (object) $r['before'], 'after' => (object) $r['after'], 'modifiedGmt' => Visibility_Content::modified_gmt($post_id)], null];
   }
 
   // ─── WooCommerce (#289) ────────────────────────────────────────────────

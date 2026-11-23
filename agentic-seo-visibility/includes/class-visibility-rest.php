@@ -406,16 +406,16 @@ class Visibility_REST {
   }
 
   /**
-   * GET /posts/{id}?include=seo,fields,blocks,builder,terms (or include=all).
+   * GET /posts/{id}?include=seo,fields,meta,blocks,builder,terms (or include=all).
    * Without `include` everything except `blocks` is returned.
    */
   public function get_post(WP_REST_Request $request) {
     $post = $this->readable_post($request['id']);
     if (is_wp_error($post)) return $post;
     $inc = $request->get_param('include');
-    $parts = ['seo', 'fields', 'builder', 'terms', 'images'];
+    $parts = ['seo', 'fields', 'meta', 'builder', 'terms', 'images'];
     if (is_string($inc) && $inc !== '') {
-      $parts = $inc === 'all' ? ['seo', 'fields', 'builder', 'terms', 'images', 'blocks'] : array_map('trim', explode(',', $inc));
+      $parts = $inc === 'all' ? ['seo', 'fields', 'meta', 'builder', 'terms', 'images', 'blocks'] : array_map('trim', explode(',', $inc));
     }
     return rest_ensure_response($this->serialize_post_full($post->ID, $parts));
   }
@@ -788,7 +788,7 @@ class Visibility_REST {
    * Full post. $parts picks the optional sections (seo, fields, builder,
    * terms, images, blocks); the basic fields are always there.
    */
-  private function serialize_post_full($post_id, array $parts = ['seo', 'fields', 'builder', 'terms', 'images']) {
+  private function serialize_post_full($post_id, array $parts = ['seo', 'fields', 'meta', 'builder', 'terms', 'images']) {
     $post = get_post($post_id);
     if (!$post) return null;
     $categories = is_object_in_taxonomy($post->post_type, 'category') ? wp_get_post_categories($post_id, ['fields' => 'all']) : [];
@@ -825,9 +825,15 @@ class Visibility_REST {
     if (in_array('builder', $parts, true)) $out['builder'] = Visibility_Read::builder_of($post);
     if (in_array('seo', $parts, true))     $out['seo'] = Visibility_SEO::read_post($post->ID);
     if (in_array('fields', $parts, true))  $out['fields'] = Visibility_Read::fields($post);
+    // 2.1.0: every meta key of the post (secrets and housekeeping left out).
+    if (in_array('meta', $parts, true))    $out['meta'] = Visibility_Meta::for_post($post);
     if (in_array('terms', $parts, true))   $out['terms'] = Visibility_Read::terms($post);
     if (in_array('images', $parts, true))  $out['images'] = Visibility_Read::images($post->post_content);
-    if (in_array('blocks', $parts, true))  $out['blocks'] = Visibility_Read::blocks($post->post_content);
+    if (in_array('blocks', $parts, true)) {
+      $out['blocks'] = Visibility_Read::blocks($post->post_content);
+      // 2.1.0: is the post properly in blocks? (parse_blocks summary, read-only)
+      $out['blockSummary'] = Visibility_Meta::block_summary($post->post_content);
+    }
     // Products (#289): their shop fields; price and stock read-only.
     if ($post->post_type === 'product' && Visibility_WooCommerce::active()) $out['product'] = Visibility_WooCommerce::read($post->ID);
     // Builder pages: the widgets agents can target by elementId (#286).

@@ -154,6 +154,8 @@ class Visibility_SEO_Head {
     if (in_array('description', $theme, true)) $v['description'] = '';
     if (in_array('canonical', $theme, true)) $v['canonicalSet'] = false;
     if (in_array('og', $theme, true)) { $v['ogTitle'] = ''; $v['ogDescription'] = ''; $v['ogImage'] = ''; }
+    // An SEO plugin found by its registered meta that prints its own Twitter card.
+    $twitter = !in_array('twitter', $theme, true);
 
     echo "\n<!-- Agentic SEO for Visibility -->\n";
     if ($v['description'] !== '') {
@@ -179,11 +181,13 @@ class Visibility_SEO_Head {
     }
 
     // Twitter reads og:* for anything not set here.
-    $tw_image = $v['twitterImage'] !== '' ? $v['twitterImage'] : $v['ogImage'];
-    printf("<meta name=\"twitter:card\" content=\"%s\" />\n", $tw_image !== '' ? 'summary_large_image' : 'summary');
-    if ($v['twitterTitle'] !== '') printf("<meta name=\"twitter:title\" content=\"%s\" />\n", esc_attr(self::clamp($v['twitterTitle'], 200)));
-    if ($v['twitterDescription'] !== '') printf("<meta name=\"twitter:description\" content=\"%s\" />\n", esc_attr(self::clamp($v['twitterDescription'], 320)));
-    if ($v['twitterImage'] !== '') printf("<meta name=\"twitter:image\" content=\"%s\" />\n", esc_url($v['twitterImage']));
+    if ($twitter) {
+      $tw_image = $v['twitterImage'] !== '' ? $v['twitterImage'] : $v['ogImage'];
+      printf("<meta name=\"twitter:card\" content=\"%s\" />\n", $tw_image !== '' ? 'summary_large_image' : 'summary');
+      if ($v['twitterTitle'] !== '') printf("<meta name=\"twitter:title\" content=\"%s\" />\n", esc_attr(self::clamp($v['twitterTitle'], 200)));
+      if ($v['twitterDescription'] !== '') printf("<meta name=\"twitter:description\" content=\"%s\" />\n", esc_attr(self::clamp($v['twitterDescription'], 320)));
+      if ($v['twitterImage'] !== '') printf("<meta name=\"twitter:image\" content=\"%s\" />\n", esc_url($v['twitterImage']));
+    }
 
     // Structured data written for the post.
     if (is_singular()) {
