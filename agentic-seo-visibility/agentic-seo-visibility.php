@@ -95,3 +95,12 @@ register_deactivation_hook(__FILE__, function () {
 add_action('visibility_daily_heartbeat', function () {
   Visibility_Client::heartbeat();
 });
+
+// An in-place update doesn't run the activation hook, so Visibility only heard
+// of the new version at the next daily heartbeat and kept saying "update the
+// plugin". The first request on a new version tells it at once (#473).
+add_action('init', function () {
+  if (get_option('visibility_installed_version', '') === VISIBILITY_PLUGIN_VERSION) return;
+  update_option('visibility_installed_version', VISIBILITY_PLUGIN_VERSION, false);
+  Visibility_Client::heartbeat();
+});
