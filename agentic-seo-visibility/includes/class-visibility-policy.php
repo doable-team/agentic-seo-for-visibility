@@ -63,6 +63,9 @@ class Visibility_Policy {
     'product.update'        => 'edit_content',
     // A category's name, address and description are its content, like a product's.
     'term.update'           => 'edit_content',
+    // #470: putting a post in a category / tag, and a new category or tag, are "meta tags" like category.create.
+    'post.update_terms'     => 'edit_meta',
+    'term.create'           => 'edit_meta',
     'media.upload_from_url' => 'images',
     'media.update_meta'     => 'images',
     'media.bulk_alt'        => 'images',
@@ -320,6 +323,12 @@ class Visibility_Policy {
     if (in_array($action_type, ['category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'redirect.create', 'redirect.delete', 'term.update'], true)) {
       $post_id = 0;
     }
+    if ($action_type === 'term.create') {
+      // A new category belongs to its content: product ones need products allowed, blog ones posts.
+      $post_id = 0;
+      $type = strpos((string) ($payload['taxonomy'] ?? ''), 'product_') === 0 ? 'product' : 'post';
+    }
+    if ($action_type === 'post.update_terms' && self::is_visibility_draft($post_id)) $needed = ['create_drafts'];
     if ($action_type === 'post.update_meta') {
       $fields = isset($payload['fields']) && is_array($payload['fields']) ? array_keys($payload['fields']) : [];
       $needed = [];

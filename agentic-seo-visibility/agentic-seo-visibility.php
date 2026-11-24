@@ -72,6 +72,7 @@ add_action('plugins_loaded', function () {
   // Redirect plugins and the built-in redirect store (#292).
   Visibility_Redirects::init();
   add_action('visibility_rollback_custom', ['Visibility_Media', 'rollback_custom'], 10, 3);
+  add_action('visibility_rollback_custom', ['Visibility_Executor', 'rollback_custom'], 10, 3);
 });
 
 // Register the 5-minute schedule the action-request cron uses.

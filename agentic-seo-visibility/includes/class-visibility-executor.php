@@ -67,7 +67,7 @@ class Visibility_Executor {
   /** Actions that create a post (snapshot after, rollback = trash). */
   const CREATE_ACTIONS = ['post.create_draft', 'page.create_draft'];
   /** Actions that cannot be undone from a snapshot. */
-  const NO_SNAPSHOT = ['post.delete_permanent', 'media.delete', 'media.upload_from_url', 'media.bulk_alt', 'change.rollback', 'redirect.create', 'redirect.delete', 'category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'term.update'];
+  const NO_SNAPSHOT = ['post.delete_permanent', 'media.delete', 'media.upload_from_url', 'media.bulk_alt', 'change.rollback', 'redirect.create', 'redirect.delete', 'category.create', 'category.update', 'category.delete', 'tag.create', 'tag.update', 'tag.delete', 'term.update', 'term.create'];
 
   /** The post (or attachment) an action writes to, for the snapshot. */
   private static function target_post($action_type, $payload) {
@@ -151,6 +151,8 @@ class Visibility_Executor {
       'meta.update'            => 'exec_meta_update',
       'product.update'         => 'exec_product_update',
       'term.update'            => 'exec_term_update',
+      'post.update_terms'      => 'exec_post_update_terms',
+      'term.create'            => 'exec_term_create',
     ];
     return isset($map[$action_type]) ? $map[$action_type] : null;
   }
@@ -795,6 +797,100 @@ class Visibility_Executor {
       Visibility_Redirects::$linked = [];
     }
     return [true, $r, null];
+  }
+
+  /** Taxonomies agents may assign and create terms in (#470). */
+  const ASSIGN_TAXONOMIES = ['category', 'post_tag', 'product_cat', 'product_tag'];
+
+  private static function term_taxonomy($payload, $post_type = null) {
+    $tax = sanitize_key((string) ($payload['taxonomy'] ?? ''));
+    if (!in_array($tax, self::ASSIGN_TAXONOMIES, true) || !taxonomy_exists($tax)) {
+      return new WP_Error('invalid', sprintf('taxonomy must be one of: %s', implode(', ', array_filter(self::ASSIGN_TAXONOMIES, 'taxonomy_exists'))));
+    }
+    if ($post_type !== null && !is_object_in_taxonomy($post_type, $tax)) {
+      return new WP_Error('invalid', sprintf('A %s has no %s.', $post_type, $tax));
+    }
+    return $tax;
+  }
+
+  /**
+   * post.update_terms {postId, taxonomy, add?:[ids], remove?:[ids], set?:[ids]} (#470):
+   * add or remove categories / tags on a post, page or product. Only existing
+   * terms; the post's change snapshot covers its terms, so it rolls back.
+   */
+  private static function exec_post_update_terms($payload) {
+    $post_id = (int) ($payload['postId'] ?? 0);
+    $post = $post_id ? get_post($post_id) : null;
+    if (!$post) return self::fail('not_found', 'post not found');
+    if (Visibility_Content::is_stale($post_id, $payload['modifiedGmt'] ?? null)) {
+      return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
+    }
+    $tax = self::term_taxonomy($payload, $post->post_type);
+    if (is_wp_error($tax)) return self::fail('invalid', $tax->get_error_message());
+    $ids = function ($k) use ($payload) { return isset($payload[$k]) && is_array($payload[$k]) ? array_values(array_unique(array_filter(array_map('intval', $payload[$k])))) : null; };
+    $add = $ids('add'); $remove = $ids('remove'); $set = $ids('set');
+    if ($add === null && $remove === null && $set === null) return self::fail('invalid', 'Give add, remove or set (term ids).');
+    $missing = [];
+    foreach (array_merge((array) $add, (array) $set) as $t) {
+      $term = get_term($t, $tax);
+      if (!$term || is_wp_error($term)) $missing[] = $t;
+    }
+    if ($missing) return self::fail('not_found', sprintf('No %s with id %s on this site.', $tax, implode(', ', $missing)));
+    $before = wp_get_object_terms($post_id, $tax, ['fields' => 'ids']);
+    $before = is_wp_error($before) ? [] : array_map('intval', $before);
+    $next = $set !== null ? $set : $before;
+    if ($add) $next = array_values(array_unique(array_merge($next, $add)));
+    if ($remove) $next = array_values(array_diff($next, $remove));
+    $r = wp_set_object_terms($post_id, $next, $tax, false);
+    if (is_wp_error($r)) return self::fail('invalid', $r->get_error_message());
+    clean_post_cache($post_id);
+    $names = function ($list) use ($tax) { return array_values(array_map(function ($id) use ($tax) { $t = get_term($id, $tax); return ['id' => (int) $id, 'name' => ($t && !is_wp_error($t)) ? $t->name : '#' . $id]; }, $list)); };
+    $after = wp_get_object_terms($post_id, $tax, ['fields' => 'ids']);
+    $after = is_wp_error($after) ? [] : array_map('intval', $after);
+    return [true, self::post_result($post_id) + ['taxonomy' => $tax, 'before' => $names($before), 'after' => $names($after)], null];
+  }
+
+  /**
+   * term.create {taxonomy, name, slug?, description?, parentId?} (#470): a new
+   * category or tag. Recorded so it can be undone (deleted while nothing uses it).
+   */
+  private static function exec_term_create($payload) {
+    $tax = self::term_taxonomy($payload);
+    if (is_wp_error($tax)) return self::fail('invalid', $tax->get_error_message());
+    $name = trim(sanitize_text_field((string) ($payload['name'] ?? '')));
+    if ($name === '') return self::fail('invalid', 'name required');
+    $args = [];
+    if (!empty($payload['slug']))        $args['slug'] = sanitize_title((string) $payload['slug']);
+    if (!empty($payload['description'])) $args['description'] = sanitize_textarea_field((string) $payload['description']);
+    if (!empty($payload['parentId'])) {
+      if (!is_taxonomy_hierarchical($tax)) return self::fail('invalid', sprintf('%s has no parents.', $tax));
+      $parent = get_term((int) $payload['parentId'], $tax);
+      if (!$parent || is_wp_error($parent)) return self::fail('not_found', 'parent not found');
+      $args['parent'] = (int) $payload['parentId'];
+    }
+    $existing = term_exists($name, $tax, isset($args['parent']) ? $args['parent'] : null);
+    if ($existing) return self::fail('exists', sprintf('A %s named "%s" already exists (id %d). Use it instead.', $tax === 'post_tag' ? 'tag' : 'category', $name, (int) $existing['term_id']));
+    $term = wp_insert_term($name, $tax, $args);
+    if (is_wp_error($term)) return self::fail('invalid', $term->get_error_message());
+    $id = (int) $term['term_id'];
+    $t = get_term($id, $tax);
+    $change = Visibility_Changes::record_custom('term.create', ['term:' . $id], [], ['taxonomy' => $tax, 'termId' => $id]);
+    return [true, ['termId' => $id, 'taxonomy' => $tax, 'name' => $t->name, 'slug' => $t->slug, 'link' => get_term_link($t), 'changeId' => $change], null];
+  }
+
+  /** Undo term.create: delete the term while no post uses it. */
+  public static function rollback_custom($result, $row, $states) {
+    if ($row->action !== 'term.create') return;
+    list(, $after) = $states;
+    $id = (int) ($after['termId'] ?? 0); $tax = (string) ($after['taxonomy'] ?? '');
+    $t = $id ? get_term($id, $tax) : null;
+    if (!$t || is_wp_error($t)) { $result->data = ['termId' => $id, 'deleted' => false]; return; }
+    if ((int) $t->count > 0) {
+      $result->error = new WP_Error('conflict', sprintf('"%s" is used by %d post(s) now, so it was not deleted.', $t->name, (int) $t->count), ['changedSince' => ['term:' . $id]]);
+      return;
+    }
+    wp_delete_term($id, $tax);
+    $result->data = ['termId' => $id, 'deleted' => true];
   }
 
   // ─── Rollback ──────────────────────────────────────────────────────────

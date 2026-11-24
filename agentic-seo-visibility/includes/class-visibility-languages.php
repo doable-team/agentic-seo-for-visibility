@@ -47,7 +47,7 @@ class Visibility_Languages {
     'post.update_content', 'page.update_content', 'post.edit_parts', 'page.edit_parts',
     'seo_meta.update', 'fields.update', 'meta.update', 'post.update_meta', 'internal_link.suggest',
     'post.publish', 'page.publish', 'post.schedule', 'post.unpublish', 'post.trash',
-    'product.update', 'term.update',
+    'product.update', 'term.update', 'post.update_terms',
   ];
 
   /** WPML hooks the adapter relies on: [type, name]. */
