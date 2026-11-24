@@ -126,6 +126,8 @@ class Visibility_Policy {
       update_option('visibility_disabled', $body['disabled'] ? '1' : '0', false);
     }
     if (array_key_exists('controls', $body)) {
+      // When Visibility last sent them, shown next to the controls (#474).
+      update_option('visibility_controls_at', time(), false);
       if ($body['controls'] === null) {
         delete_option('visibility_controls');
       } elseif (is_array($body['controls'])) {

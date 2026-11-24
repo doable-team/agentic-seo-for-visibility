@@ -121,6 +121,25 @@ import json,sys; s=json.load(open(sys.argv[1])); s["heartbeat"]={"siteId":"test-
 PY
 $WP $S eval 'Visibility_Client::heartbeat();' >/dev/null
 check "$(api $S GET /capabilities | jget "d['permissions']['controls']['actions']")" "['create_drafts']" "heartbeat reply updates controls"
+# #474: the settings page says when Visibility last sent them, and "Check in now" runs the heartbeat.
+H=$(curl -s -b $CJ "$U/wp-admin/admin.php?page=visibility")
+grep -q 'id="visibility-controls-at">Last updated from Visibility' <<<"$H" && ok "settings page shows when the controls were last updated" || bad "no 'last updated from Visibility'"
+NONCE=$(grep 'value="visibility_checkin"' <<<"$H" | grep -oE 'name="_wpnonce" value="[a-f0-9]+"' | head -1 | grep -oE '[a-f0-9]{10}')
+python3 - "$STATE" <<'PY'
+import json,sys; s=json.load(open(sys.argv[1])); s["heartbeat"]["controls"]["actions"]=["create_drafts","edit_meta"]; json.dump(s,open(sys.argv[1],"w"))
+PY
+N0=$(python3 -c "import json;print(len(json.load(open('$STATE')).get('heartbeats',[])))")
+L=$(curl -s -b $CJ -o /dev/null -w '%{redirect_url}' -d "action=visibility_checkin&_wpnonce=$NONCE" $U/wp-admin/admin-post.php)
+check "$(python3 -c "import json;print(len(json.load(open('$STATE')).get('heartbeats',[])))")" "$((N0+1))" "Check in now sent a heartbeat"
+grep -q 'visibility_status=checked_in' <<<"$L" && ok "Check in now reports success" || bad "check-in result: $L"
+check "$(api $S GET /capabilities | jget "d['permissions']['controls']['actions']")" "['create_drafts', 'edit_meta']" "Check in now took the latest controls"
+# #473: the first request on a new version tells Visibility at once.
+$WP $S option update visibility_installed_version 0.0.1 >/dev/null
+N0=$(python3 -c "import json;print(len(json.load(open('$STATE')).get('heartbeats',[])))")
+curl -s -o /dev/null "$U/"
+check "$(python3 -c "import json;h=json.load(open('$STATE')).get('heartbeats',[]);print(len(h)-$N0, h[-1].get('pluginVersion') if h else '')")" "1 $($WP $S eval 'echo VISIBILITY_PLUGIN_VERSION;' | tr -d '\r')" "a new version sends one heartbeat with it at once"
+curl -s -o /dev/null "$U/"
+check "$(python3 -c "import json;print(len(json.load(open('$STATE')).get('heartbeats',[]))-$N0)")" "1" "only once per version"
 api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
 check "$(api $S GET /capabilities | jget "d['permissions']['controls']")" "None" "controls:null resets to never received"
 check "$(api $S GET /capabilities | jget "'privacy' in d['specialPages']")" "True" "specialPages lists the privacy page"

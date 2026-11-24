@@ -133,7 +133,7 @@ class Visibility_Client {
    *  Silently no-ops when the plugin isn't paired. */
   public static function heartbeat() {
     if (!self::is_paired()) {
-      return;
+      return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-visibility'));
     }
     $resp = wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/heartbeat', [
       'timeout' => 10,
@@ -150,15 +150,16 @@ class Visibility_Client {
       ]),
     ]);
     if (is_wp_error($resp)) {
-      return;
+      return $resp;
     }
     $status = wp_remote_retrieve_response_code($resp);
     if ($status < 200 || $status >= 300) {
-      return;
+      /* translators: %d: HTTP status code */
+      return new WP_Error('visibility_heartbeat', sprintf(__('Visibility answered with error %d.', 'agentic-seo-visibility'), (int) $status));
     }
     $body = json_decode(wp_remote_retrieve_body($resp), true);
     if (!is_array($body)) {
-      return;
+      return new WP_Error('visibility_heartbeat', __('Visibility sent an answer this site could not read.', 'agentic-seo-visibility'));
     }
     if (isset($body['projectName'])) {
       update_option('visibility_project_name', (string) $body['projectName'], false);
@@ -172,6 +173,7 @@ class Visibility_Client {
     // The owner's switches, when the server includes them.
     Visibility_Policy::apply_flags($body);
     update_option('visibility_last_seen_at', time(), false);
+    return true;
   }
 
   // ─── Action-request API ───────────────────────────────────────────────

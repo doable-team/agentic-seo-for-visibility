@@ -25,6 +25,7 @@ class Visibility_Settings {
     add_action('admin_post_visibility_author', [$this, 'handle_author']);
     add_action('admin_post_visibility_pause', [$this, 'handle_pause']);
     add_action('admin_post_visibility_signing', [$this, 'handle_signing']);
+    add_action('admin_post_visibility_checkin', [$this, 'handle_checkin']);
   }
 
   /** Build the nonce-protected query args for a redirect-after-action.
@@ -146,6 +147,20 @@ class Visibility_Settings {
     exit;
   }
 
+  /** Check in with Visibility now: sends the version and pause state, takes the latest settings (#474). */
+  public function handle_checkin() {
+    if (!current_user_can('manage_options')) {
+      wp_die(esc_html__('Permission denied.', 'agentic-seo-visibility'));
+    }
+    check_admin_referer('visibility_checkin');
+    $r = Visibility_Client::heartbeat();
+    $args = is_wp_error($r)
+      ? $this->get_notice_query_args('error', __('Check-in failed:', 'agentic-seo-visibility') . ' ' . $r->get_error_message())
+      : $this->get_notice_query_args('checked_in');
+    wp_safe_redirect(add_query_arg($args, admin_url('admin.php')));
+    exit;
+  }
+
   /** Require signed requests from Visibility (#296). */
   public function handle_signing() {
     if (!current_user_can('manage_options')) {
@@ -190,6 +205,18 @@ class Visibility_Settings {
           <input type="hidden" name="visibility_pause" value="on" />
           <button type="submit" class="button" id="visibility-pause"><?php echo esc_html__('Pause all', 'agentic-seo-visibility'); ?></button>
         <?php endif; ?>
+      </form>
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom:14px">
+        <?php wp_nonce_field('visibility_checkin'); ?>
+        <input type="hidden" name="action" value="visibility_checkin" />
+        <button type="submit" class="button" id="visibility-checkin"><?php echo esc_html__('Check in now', 'agentic-seo-visibility'); ?></button>
+        <span class="description" id="visibility-controls-at"><?php
+          $at = (int) get_option('visibility_controls_at', 0);
+          echo esc_html($at
+            /* translators: %s: how long ago, e.g. "5 minutes" */
+            ? sprintf(__('Last updated from Visibility %s ago.', 'agentic-seo-visibility'), human_time_diff($at))
+            : __('Not updated from Visibility yet.', 'agentic-seo-visibility'));
+        ?></span>
       </form>
       <?php if ($c === null) : ?>
         <p class="description"><?php echo esc_html__('No limits have been set in Visibility yet.', 'agentic-seo-visibility'); ?>
@@ -285,6 +312,8 @@ class Visibility_Settings {
         <div class="notice notice-success"><p><?php echo esc_html__('Resumed.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'signing_saved') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Connection security saved.', 'agentic-seo-visibility'); ?></p></div>
+      <?php elseif ($status === 'checked_in') : ?>
+        <div class="notice notice-success"><p><?php echo esc_html__('Checked in with Visibility. The settings below are the latest.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'author_saved') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Default author saved.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'error') : ?>
