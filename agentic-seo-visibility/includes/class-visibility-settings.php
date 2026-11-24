@@ -26,6 +26,7 @@ class Visibility_Settings {
     add_action('admin_post_visibility_pause', [$this, 'handle_pause']);
     add_action('admin_post_visibility_signing', [$this, 'handle_signing']);
     add_action('admin_post_visibility_checkin', [$this, 'handle_checkin']);
+    add_action('admin_post_visibility_profile', [$this, 'handle_profile']);
   }
 
   /** Build the nonce-protected query args for a redirect-after-action.
@@ -161,6 +162,19 @@ class Visibility_Settings {
     exit;
   }
 
+  /** Share the site profile with Visibility, or not (#471). */
+  public function handle_profile() {
+    if (!current_user_can('manage_options')) {
+      wp_die(esc_html__('Permission denied.', 'agentic-seo-visibility'));
+    }
+    check_admin_referer('visibility_profile');
+    $on = isset($_POST['visibility_profile']) && sanitize_key(wp_unslash($_POST['visibility_profile'])) === '1';
+    update_option(Visibility_Profile::OFF_OPTION, $on ? '0' : '1', false);
+    Visibility_Profile::forget();
+    wp_safe_redirect(add_query_arg($this->get_notice_query_args('profile_saved'), admin_url('admin.php')));
+    exit;
+  }
+
   /** Require signed requests from Visibility (#296). */
   public function handle_signing() {
     if (!current_user_can('manage_options')) {
@@ -217,6 +231,14 @@ class Visibility_Settings {
             ? sprintf(__('Last updated from Visibility %s ago.', 'agentic-seo-visibility'), human_time_diff($at))
             : __('Not updated from Visibility yet.', 'agentic-seo-visibility'));
         ?></span>
+      </form>
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom:14px">
+        <?php wp_nonce_field('visibility_profile'); ?>
+        <input type="hidden" name="action" value="visibility_profile" />
+        <input type="hidden" name="visibility_profile" value="0" />
+        <label><input type="checkbox" name="visibility_profile" value="1" id="visibility-profile" <?php checked(Visibility_Profile::enabled()); ?> onchange="this.form.submit()" />
+          <?php echo esc_html__('Share how this site is built with Visibility (blocks, categories and tags, post settings in use, how recent posts are laid out), so agents write the way your posts are written. Never drafts, users or passwords.', 'agentic-seo-visibility'); ?></label>
+        <noscript><button type="submit" class="button"><?php echo esc_html__('Save', 'agentic-seo-visibility'); ?></button></noscript>
       </form>
       <?php if ($c === null) : ?>
         <p class="description"><?php echo esc_html__('No limits have been set in Visibility yet.', 'agentic-seo-visibility'); ?>
@@ -312,6 +334,8 @@ class Visibility_Settings {
         <div class="notice notice-success"><p><?php echo esc_html__('Resumed.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'signing_saved') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Connection security saved.', 'agentic-seo-visibility'); ?></p></div>
+      <?php elseif ($status === 'profile_saved') : ?>
+        <div class="notice notice-success"><p><?php echo esc_html__('Site profile setting saved.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'checked_in') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Checked in with Visibility. The settings below are the latest.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'author_saved') : ?>

@@ -54,6 +54,13 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
 
+    // How the site is built (#471): blocks, taxonomies, meta keys, options, post patterns.
+    register_rest_route('visibility/v1', '/profile', [
+      'methods'             => 'GET',
+      'callback'            => [$this, 'profile'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // ─── Event receivers (server → plugin pushes) ──────────────────────
     //
     // The Visibility server pushes events here whenever something
@@ -300,6 +307,13 @@ class Visibility_REST {
     $body = $request->get_json_params();
     $req = is_array($body) && array_key_exists('requireSignature', $body) && $body['requireSignature'] !== null ? (bool) $body['requireSignature'] : null;
     return rest_ensure_response(Visibility_Auth::rotate($req));
+  }
+
+  public function profile(WP_REST_Request $request) {
+    if (!Visibility_Profile::enabled()) {
+      return new WP_Error('visibility_profile_off', __('The site owner turned the site profile off in the plugin settings.', 'agentic-seo-visibility'), ['status' => 403]);
+    }
+    return rest_ensure_response(Visibility_Profile::get());
   }
 
   public function capabilities(WP_REST_Request $request) {
