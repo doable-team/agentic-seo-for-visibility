@@ -74,3 +74,5 @@ if (is_multisite()) {
 } else {
   visibility_uninstall_site();
 }
+// Who dismissed which "update available" notice (users are shared across a network).
+delete_metadata('user', 0, 'visibility_update_dismissed', '', true);

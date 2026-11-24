@@ -60,6 +60,7 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-head.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-schema.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-redirects.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-profile.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-update-notice.php';
 
 add_action('plugins_loaded', function () {
   new Visibility_Settings();
@@ -74,6 +75,8 @@ add_action('plugins_loaded', function () {
   Visibility_Redirects::init();
   // The site profile is rebuilt when content, terms, the theme or plugins change (#471).
   Visibility_Profile::init();
+  // "Update available — update now" in WP admin when wordpress.org has a newer version.
+  if (is_admin()) Visibility_Update_Notice::init();
   add_action('visibility_rollback_custom', ['Visibility_Media', 'rollback_custom'], 10, 3);
   add_action('visibility_rollback_custom', ['Visibility_Executor', 'rollback_custom'], 10, 3);
 });
