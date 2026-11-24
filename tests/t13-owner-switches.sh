@@ -37,5 +37,17 @@ check "$CODE" "200" "paused: reads still allowed"
 # Back on.
 api $S POST /events/site-config-changed '{"allowPublish":true,"disabled":false}' >/dev/null
 R=$(action $S post.publish "{\"postId\":$D}"); check "$(echo "$R" | jget "['ok']")" "True" "switches back on: publish works"
+
+# #463: undoing an unpublish while publishing is off would put the page live again.
+R=$(action $S post.unpublish "{\"postId\":$D}"); CID=$(echo "$R" | jget "d.get('result',{}).get('changeId')")
+check "$(status)" "draft" "unpublished (changeId $CID)"
+api $S POST /events/site-config-changed '{"allowPublish":false}' >/dev/null
+R=$(action $S change.rollback "{\"changeId\":$CID}")
+check "$(echo "$R" | jget "d.get('errorCode')")" "publishing_off" "publishing off: undoing the unpublish (action) -> publishing_off"
+CODE=$(curl -s -o /tmp/t13s.json -w '%{http_code}' -X POST -H "Authorization: Bearer vis-test-token-$S" -H 'Content-Type: application/json' --data '{}' http://localhost:$((PORT_BASE+S))/wp-json/visibility/v1/changes/$CID/rollback)
+check "$CODE $(jget "['code']" </tmp/t13s.json)" "403 visibility_publishing_off" "publishing off: POST /changes/{id}/rollback -> 403 publishing_off"
+check "$(status)" "draft" "page stays a draft"
+R=$(action $S post.update_content "{\"postId\":$D,\"fields\":{\"title\":\"T13 edit to undo\"}}"); CID2=$(echo "$R" | jget "d.get('result',{}).get('changeId')")
+R=$(action $S change.rollback "{\"changeId\":$CID2}"); check "$(echo "$R" | jget "['ok']")" "True" "publishing off: undoing a draft edit still works"
 $WP $S option delete visibility_allow_publish >/dev/null; $WP $S option delete visibility_disabled >/dev/null
 summary

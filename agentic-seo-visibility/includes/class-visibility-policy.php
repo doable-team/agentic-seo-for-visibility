@@ -247,6 +247,9 @@ class Visibility_Policy {
       if (in_array($status, self::PUBLISH_STATUSES, true)) {
         return ['publishing_off', 'Publishing is turned off for this site, so the plugin refused to set the status to ' . $status . '.'];
       }
+      if ($action_type === 'change.rollback' && self::rollback_publishes((int) ($payload['changeId'] ?? 0))) {
+        return ['publishing_off', 'Publishing is turned off for this site, so the plugin refused this undo: it would put the page live again.'];
+      }
     }
     if (self::controls() === null) return null;
     list($needed, $post_id, $type) = self::needs_for_action($action_type, $payload);
@@ -331,6 +334,20 @@ class Visibility_Policy {
     return [$needed, $post_id, $type];
   }
 
+  /**
+   * Whether undoing change $change_id would put a post live: the status before
+   * that change was a publish status and it isn't one now (#463, e.g. undoing an
+   * unpublish while publishing is turned off).
+   */
+  private static function rollback_publishes($change_id) {
+    $row = class_exists('Visibility_Changes') ? Visibility_Changes::get((int) $change_id) : null;
+    if (!$row || !(int) $row->post_id || !$row->before_state) return false;
+    $before = maybe_unserialize($row->before_state);
+    $was = is_array($before) && isset($before['post']['post_status']) ? (string) $before['post']['post_status'] : '';
+    if (!in_array($was, self::PUBLISH_STATUSES, true)) return false;
+    return !in_array((string) get_post_status((int) $row->post_id), self::PUBLISH_STATUSES, true);
+  }
+
   private static function needs_for_rollback($row) {
     $ctl = isset(self::ACTION_CONTROL[$row->action]) ? self::ACTION_CONTROL[$row->action] : 'edit_content';
     if ($ctl === 'edit_content' && self::is_visibility_draft((int) $row->post_id)) $ctl = 'create_drafts';
@@ -360,6 +377,9 @@ class Visibility_Policy {
     if (get_option('visibility_allow_publish', '') === '0') {
       if ($is_post_route && ($method === 'DELETE' || in_array($status, self::PUBLISH_STATUSES, true))) {
         return new WP_Error('visibility_publishing_off', __('Publishing is turned off for this site, so the plugin refused this change.', 'agentic-seo-visibility'), ['status' => 403]);
+      }
+      if (preg_match('#^/visibility/v1/changes/(\d+)/rollback$#', $route, $rb) && self::rollback_publishes((int) $rb[1])) {
+        return new WP_Error('visibility_publishing_off', __('Publishing is turned off for this site, so the plugin refused this undo: it would put the page live again.', 'agentic-seo-visibility'), ['status' => 403]);
       }
     }
     if (self::controls() === null) return true;
