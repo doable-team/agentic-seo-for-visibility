@@ -119,6 +119,30 @@ Terms of service & privacy policy: linked from the Visibility dashboard footer.
 == Changelog ==
 
 = 2.1.1 =
+* **Update notice.** When a newer version of this plugin is available,
+  WordPress admin says "Update available — update now to avoid errors." with
+  an Update now button that starts the update straight away. You can dismiss
+  it until the next version; it always shows on the plugin's own page, and
+  only to people who can update plugins.
+* **Visibility hears about an update at once.** After you update the plugin,
+  the next page load tells Visibility the new version, so agents stop saying
+  "update the plugin" straight away instead of the next day.
+* **Check in now.** A new button on the plugin's page next to Pause sends your
+  site's state to Visibility and takes the latest settings from it, and the
+  page shows when Visibility last sent what agents may do.
+* **Categories and tags.** Agents can add or remove categories and tags on an
+  existing post, page or product, and create a new category or tag, each
+  after your approval and with undo. Both need "Edit meta tags" switched on,
+  and locked pages are left alone. A new category or tag is undone by deleting
+  it, only while no post uses it.
+* **Site profile.** The plugin can share how your site is built: the blocks
+  your posts use (with a short sample of each), your categories and tags,
+  the post settings in use, a few site settings such as the permalink
+  structure, and how your recent posts are laid out. Agents use it to write
+  new posts the same way. It never includes drafts, users or passwords, and
+  you can turn it off on the plugin's page.
+* **Undo can't put a page live while publishing is off.** Undoing an
+  "unpublish" is now refused while you have publishing turned off.
 * **Locked pages can't be redirected away.** When you lock a page, an agent
   can no longer add a redirect from its address (or from an old address that
   still leads to it), and can't delete a redirect that keeps an old address
