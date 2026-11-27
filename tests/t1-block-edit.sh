@@ -73,6 +73,15 @@ R=$(action $S page.edit_parts "{\"postId\":$ID,\"edits\":[{\"target\":{\"path\":
 check "$(echo "$R" | jget "['ok']")" "True" "remove ok"
 check "$($WP $S post get $ID --field=post_content)" "$EXP2" "remove restores the exact previous content"
 
+# #574: plain HTML (no block comments) inserted into a block page would sit outside any block.
+B4=$($WP $S post get $ID --field=post_content)
+for op in insert_after insert_before replace_block; do
+  R=$(action $S page.edit_parts "{\"postId\":$ID,\"edits\":[{\"target\":{\"path\":\"0\"},\"op\":\"$op\",\"html\":\"<p>Inserted as plain HTML</p>\"}]}")
+  check "$(echo "$R" | jget "(d['ok'], d.get('errorCode'))")" "(False, 'invalid')" "$op with plain HTML on a block page -> refused"
+done
+check "$($WP $S post get $ID --field=post_content)" "$B4" "nothing changed"
+check "$(api $S GET "/posts/$ID?include=blocks" | jget "d['blockSummary']['classicBlocks']")" "0" "no part outside a block"
+
 # 4. Refusals.
 R=$(action $S page.edit_parts "{\"postId\":$ID,\"edits\":[{\"target\":{\"path\":\"42\"},\"op\":\"replace_text\",\"text\":\"x\"}]}")
 check "$(echo "$R" | jget "['errorCode']")" "not_found" "missing path -> not_found"

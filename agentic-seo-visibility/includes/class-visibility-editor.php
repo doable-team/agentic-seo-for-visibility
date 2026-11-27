@@ -195,10 +195,17 @@ class Visibility_Editor {
     if ($op === 'insert_before' || $op === 'insert_after') {
       $html = self::new_markup($e);
       if (is_wp_error($html)) return $html;
+      $bad = self::require_blocks($html, $op);
+      if ($bad) return $bad;
       return $op === 'insert_before' ? $html . "\n\n" : "\n\n" . $html;
     }
     if ($op === 'remove') return '';
-    if ($op === 'replace_block') return self::new_markup($e);
+    if ($op === 'replace_block') {
+      $html = self::new_markup($e);
+      if (is_wp_error($html)) return $html;
+      $bad = self::require_blocks($html, $op);
+      return $bad ? $bad : $html;
+    }
 
     $node = self::own_node($src);
     if (!$node) return new WP_Error('not_found', 'block not found');
@@ -327,6 +334,20 @@ class Visibility_Editor {
   private static function new_markup(array $e) {
     if (!isset($e['html']) || !is_string($e['html']) || trim($e['html']) === '') return new WP_Error('invalid', $e['op'] . ' needs html');
     return wp_kses_post($e['html']);
+  }
+
+  /**
+   * On a block page, new markup must be blocks (#574): plain HTML would sit
+   * outside any block and open as a Classic block in the middle of the page.
+   * @return WP_Error|null
+   */
+  private static function require_blocks($html, $op) {
+    $parts = 0;
+    foreach (parse_blocks($html) as $b) {
+      if ($b['blockName'] === null && trim((string) $b['innerHTML']) !== '') $parts++;
+    }
+    if (!$parts) return null;
+    return new WP_Error('invalid', sprintf('%s on a block page needs block markup (<!-- wp:paragraph --><p>…</p><!-- /wp:paragraph -->); %d part(s) of the html are outside any block and would show as a Classic block.', $op, $parts));
   }
 
   private static function own_pieces($node) {
