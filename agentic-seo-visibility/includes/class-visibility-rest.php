@@ -459,6 +459,8 @@ class Visibility_REST {
       return $post_id;
     }
     Visibility_Policy::mark_created($post_id);
+    $sched = $this->schedule_refusal($post_id, $args);
+    if ($sched) { wp_delete_post($post_id, true); return $sched; }
     if (!empty($params['language']) || !empty($params['translationOf'])) {
       $lang = Visibility_Languages::assign($post_id, $params['language'] ?? '', (int) ($params['translationOf'] ?? 0));
       if (is_wp_error($lang)) {
@@ -516,6 +518,13 @@ class Visibility_REST {
       Visibility_Changes::abort($id);
       return $updated;
     }
+    $sched = $this->schedule_refusal($id, $args);
+    if ($sched) {
+      // Put the post back as it was rather than leave it live.
+      $snap = Visibility_Changes::commit($id, 'rest.update', 'rest');
+      if ($snap) Visibility_Changes::rollback((int) $snap, 'rest');
+      return $sched;
+    }
     $this->apply_term_assignments($id, $params);
     $this->apply_featured_media($id, $params);
     if (Visibility_Changes::changed_since_begin($id)) Visibility_Content::advance_modified($id, $before_gmt);
@@ -527,6 +536,19 @@ class Visibility_REST {
     $out['cachePurged'] = Visibility_Cache::purge($id);
     $out += $slug;
     return rest_ensure_response($out);
+  }
+
+  /** A write that asked for "future" must leave the post scheduled (#572); WP_Error or null. */
+  private function schedule_refusal($post_id, array $args) {
+    if (($args['post_status'] ?? '') !== 'future') return null;
+    clean_post_cache($post_id);
+    $status = get_post_status($post_id);
+    if ($status === 'future') return null;
+    return new WP_Error('visibility_schedule_failed', sprintf(
+      /* translators: %s: the post status WordPress stored. */
+      __('WordPress did not keep the post scheduled (its status became "%s"). Send a date in the future with status future.', 'agentic-seo-visibility'),
+      (string) $status
+    ), ['status' => 409]);
   }
 
   public function delete_post(WP_REST_Request $request) {
@@ -574,6 +596,8 @@ class Visibility_REST {
       if ($ts !== false) {
         $args['post_date_gmt'] = gmdate('Y-m-d H:i:s', $ts);
         $args['post_date']     = get_date_from_gmt($args['post_date_gmt']);
+        // Keep the date on a draft; without it "future" became "publish" (#572).
+        $args['edit_date']     = true;
       }
     }
     if (isset($params['parent'])) $args['post_parent'] = max(0, (int) $params['parent']);

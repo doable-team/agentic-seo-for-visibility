@@ -388,14 +388,24 @@ class Visibility_Executor {
     if (!$post_id) return [false, null, 'postId required'];
     $publish_at = isset($payload['publishAt']) ? strtotime((string) $payload['publishAt']) : false;
     if (!$publish_at) return [false, null, 'publishAt is required (ISO8601)'];
+    // A date already past (approved after it) publishes now, as before (DECISIONS #214).
+    if ($publish_at <= time()) return self::exec_post_publish($payload);
+    // edit_date: without it WordPress resets a draft's date to now and turns
+    // "future" into "publish", so the post went live at once (#572).
     $result = wp_update_post([
       'ID'            => $post_id,
       'post_status'   => 'future',
       'post_date_gmt' => gmdate('Y-m-d H:i:s', $publish_at),
       'post_date'     => get_date_from_gmt(gmdate('Y-m-d H:i:s', $publish_at)),
+      'edit_date'     => true,
     ], true);
     if (is_wp_error($result)) return [false, null, $result->get_error_message()];
-    return [true, self::post_result($post_id), null];
+    clean_post_cache($post_id);
+    $now = get_post($post_id);
+    if (!$now || $now->post_status !== 'future') {
+      return self::fail('schedule_failed', sprintf('WordPress did not keep the post scheduled (its status is now "%s").', $now ? $now->post_status : 'missing'));
+    }
+    return [true, self::post_result($post_id) + ['scheduledFor' => gmdate('Y-m-d\TH:i:s\Z', $publish_at)], null];
   }
 
   private static function exec_post_unpublish($payload) {
