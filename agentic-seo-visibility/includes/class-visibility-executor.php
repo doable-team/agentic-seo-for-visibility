@@ -170,6 +170,8 @@ class Visibility_Executor {
   // ─── Posts / Pages ─────────────────────────────────────────────────────
 
   private static function insert_post_like($payload, $post_type) {
+    $too_big = Visibility_Limits::check_blocks($payload['content'] ?? '');
+    if ($too_big) return self::fail('too_large', $too_big->get_error_message());
     $args = [
       'post_type'     => $post_type,
       'post_status'   => 'draft',
@@ -225,6 +227,8 @@ class Visibility_Executor {
       return self::fail('conflict', 'The post was changed after it was read. Read it again and retry.');
     }
     $fields = $payload['fields'] ?? [];
+    $too_big = Visibility_Limits::check_blocks(is_array($fields) ? ($fields['content'] ?? '') : '');
+    if ($too_big) return self::fail('too_large', $too_big->get_error_message());
     $args = ['ID' => $post_id];
     // Only markup the agent added is sanitised. Re-filtering the whole page
     // used to strip iframes, forms and scripts the owner had on it.
@@ -319,6 +323,8 @@ class Visibility_Executor {
     }
     $edits = isset($payload['edits']) && is_array($payload['edits']) ? array_values($payload['edits']) : [];
     if (empty($edits)) return self::fail('invalid', 'edits required');
+    $too_many = Visibility_Limits::check_edits($edits);
+    if ($too_many) return self::fail('too_large', $too_many->get_error_message());
     $builder = Visibility_Read::builder_of($post);
     if ($builder) {
       if (empty($builder['writable'])) {

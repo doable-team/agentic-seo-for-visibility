@@ -31,6 +31,7 @@ function visibility_api_base_url() {
 
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-client.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-auth.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-limits.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-content.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-editor.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-changes.php';
@@ -66,6 +67,8 @@ add_action('plugins_loaded', function () {
   new Visibility_Settings();
   new Visibility_REST();
   Visibility_Requests::init();
+  // 413 / 429 with a Retry-After header (#565).
+  Visibility_Limits::init();
   Visibility_Changes::init();
   // Emits SEO tags itself while no SEO plugin is installed; silent once one is.
   Visibility_SEO_Head::init();

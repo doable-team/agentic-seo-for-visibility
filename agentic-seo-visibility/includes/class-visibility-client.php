@@ -24,6 +24,11 @@ class Visibility_Client {
     if ($code === '') {
       return new WP_Error('visibility_no_code', __('Please enter a pairing code.', 'agentic-seo-visibility'));
     }
+    // The site key travels with every request, so a site is only paired over
+    // https (#565). A local or test site can allow http in wp-config.php.
+    if (!self::https_ok()) {
+      return new WP_Error('visibility_https_required', __('This site\'s address starts with http://, so the key Visibility uses would travel unencrypted. Switch the site to https:// (Settings › General), then pair again. For a local test site, add define(\'VISIBILITY_ALLOW_HTTP\', true); to wp-config.php.', 'agentic-seo-visibility'));
+    }
 
     $resp = wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/pair', [
       'timeout' => 20,
@@ -60,6 +65,8 @@ class Visibility_Client {
     update_option('visibility_site_token', $body['siteToken'], false);
     // A fresh pairing starts without a half-done key rotation.
     delete_option(Visibility_Auth::PENDING);
+    // New pairings only accept signed requests (#565), unless Visibility says otherwise.
+    Visibility_Auth::set_required(!array_key_exists('requireSignature', $body) || !empty($body['requireSignature']));
     update_option('visibility_project_id', $body['projectId'], false);
     update_option('visibility_project_name', isset($body['projectName']) ? (string) $body['projectName'] : '', false);
     update_option('visibility_company_id', $body['companyId'] ?? '', false);
@@ -68,6 +75,7 @@ class Visibility_Client {
       update_option('visibility_site_id', (string) $body['siteId'], false);
     }
     update_option('visibility_paired_at', time(), false);
+    delete_option('visibility_disconnected_by_app');
     update_option('visibility_last_seen_at', time(), false);
     // The admin who connected the site is the default author (#275).
     if (get_current_user_id()) update_option('visibility_paired_by', get_current_user_id(), false);
@@ -107,6 +115,11 @@ class Visibility_Client {
         // disconnect — any non-2xx is treated as success here.
       ]);
     }
+    self::forget_pairing();
+  }
+
+  /** Wipe the pairing here (both disconnect paths). */
+  public static function forget_pairing() {
     delete_option('visibility_site_token');
     Visibility_Auth::forget();
     delete_option('visibility_site_id');
@@ -116,6 +129,12 @@ class Visibility_Client {
     delete_option('visibility_company_name');
     delete_option('visibility_paired_at');
     delete_option('visibility_last_seen_at');
+  }
+
+  /** True when the site is on https, or http is allowed with VISIBILITY_ALLOW_HTTP. */
+  public static function https_ok() {
+    if (defined('VISIBILITY_ALLOW_HTTP') && VISIBILITY_ALLOW_HTTP) return true;
+    return wp_parse_url(home_url('/'), PHP_URL_SCHEME) === 'https';
   }
 
   public static function is_paired() {

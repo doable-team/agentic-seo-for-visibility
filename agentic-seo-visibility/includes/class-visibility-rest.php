@@ -102,6 +102,14 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
 
+    // Disconnect from Visibility's side (#580): the site forgets its pairing,
+    // so WP admin stops saying "Connected". Signed requests only.
+    register_rest_route('visibility/v1', '/auth/disconnect', [
+      'methods'             => 'POST',
+      'callback'            => [$this, 'disconnect'],
+      'permission_callback' => [$this, 'authenticate_signed'],
+    ]);
+
     // Posts
     register_rest_route('visibility/v1', '/posts', [
       [
@@ -227,9 +235,20 @@ class Visibility_REST {
   public function authenticate($request) {
     $auth = Visibility_Auth::check($request);
     if ($auth !== true) return $auth;
+    // Body size and requests a minute (#565).
+    $limit = Visibility_Limits::check($request);
+    if ($limit !== true) return $limit;
     // Quiet sites (#280): a call from Visibility starts a late backup tick.
     Visibility_Requests::catch_up_if_late();
     return true;
+  }
+
+  /** Like authenticate(), but only a signed request is accepted. */
+  public function authenticate_signed($request) {
+    if ((string) $request->get_header('x_visibility_signature') === '') {
+      return new WP_Error('visibility_signature_required', __('This request must be signed by Visibility.', 'agentic-seo-visibility'), ['status' => 401]);
+    }
+    return $this->authenticate($request);
   }
 
   /** Token check plus the owner's pause / publishing switches, for write routes. */
@@ -307,6 +326,13 @@ class Visibility_REST {
     $body = $request->get_json_params();
     $req = is_array($body) && array_key_exists('requireSignature', $body) && $body['requireSignature'] !== null ? (bool) $body['requireSignature'] : null;
     return rest_ensure_response(Visibility_Auth::rotate($req));
+  }
+
+  /** POST /auth/disconnect: Visibility removed this site; forget the pairing without calling back. */
+  public function disconnect(WP_REST_Request $request) {
+    Visibility_Client::forget_pairing();
+    update_option('visibility_disconnected_by_app', time(), false);
+    return rest_ensure_response(['ok' => true]);
   }
 
   public function profile(WP_REST_Request $request) {
@@ -451,6 +477,8 @@ class Visibility_REST {
       return new WP_Error('visibility_bad_type', __('Only posts and pages can be created.', 'agentic-seo-visibility'), ['status' => 400]);
     }
     // A language the site can't hold is refused, not dropped without a word (#576).
+    $too_big = Visibility_Limits::check_blocks($params['content'] ?? '');
+    if ($too_big) return $too_big;
     $lang_refused = Visibility_Languages::refuse_without_plugin($params['language'] ?? '', (int) ($params['translationOf'] ?? 0));
     if ($lang_refused) return new WP_Error('visibility_language_unsupported', $lang_refused, ['status' => 400]);
     $args = $this->build_post_args($params, ['post_status' => 'draft', 'post_type' => $type, 'post_author' => Visibility_Author::id()]);
@@ -497,6 +525,8 @@ class Visibility_REST {
     $existing = $this->readable_post($id);
     if (is_wp_error($existing)) return $existing;
     $params = $request->get_json_params() ?: [];
+    $too_big = Visibility_Limits::check_blocks($params['content'] ?? '');
+    if ($too_big) return $too_big;
     $lang = Visibility_Languages::check_edit($id, $params['language'] ?? $request->get_param('lang'));
     if ($lang) return new WP_Error('visibility_' . $lang[0], $lang[1], ['status' => 409]);
     // Optimistic lock: refuse when the post changed since the caller read it.

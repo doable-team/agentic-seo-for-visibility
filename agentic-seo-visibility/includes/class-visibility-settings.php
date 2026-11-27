@@ -328,7 +328,14 @@ class Visibility_Settings {
         <div class="notice notice-success"><p><?php echo esc_html__('Connected to Visibility.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'disconnected') : ?>
         <div class="notice notice-info"><p><?php echo esc_html__('Disconnected. Generate a fresh pairing code in Visibility to reconnect.', 'agentic-seo-visibility'); ?></p></div>
-      <?php elseif ($status === 'paused') : ?>
+      <?php endif; ?>
+      <?php if (!$paired && $status !== 'disconnected' && (int) get_option('visibility_disconnected_by_app', 0)) : ?>
+        <div class="notice notice-info"><p><?php
+          /* translators: %s: date and time. */
+          echo esc_html(sprintf(__('Disconnected from Visibility on %s. Generate a fresh pairing code in Visibility to reconnect.', 'agentic-seo-visibility'), date_i18n(get_option('date_format') . ' ' . get_option('time_format'), (int) get_option('visibility_disconnected_by_app'))));
+        ?></p></div>
+      <?php endif; ?>
+      <?php if ($status === 'paused') : ?>
         <div class="notice notice-warning"><p><?php echo esc_html__('Paused. Visibility can no longer change this site.', 'agentic-seo-visibility'); ?></p></div>
       <?php elseif ($status === 'resumed') : ?>
         <div class="notice notice-success"><p><?php echo esc_html__('Resumed.', 'agentic-seo-visibility'); ?></p></div>
@@ -477,6 +484,9 @@ class Visibility_Settings {
             <li><?php echo esc_html__('Paste the code below and click Connect.', 'agentic-seo-visibility'); ?></li>
           </ol>
 
+          <?php if (!Visibility_Client::https_ok()) : ?>
+            <div class="notice notice-warning inline"><p><?php echo esc_html__('This site\'s address starts with http://, so it can\'t be paired: the key Visibility uses would travel unencrypted. Switch the site to https:// first. For a local test site, add define(\'VISIBILITY_ALLOW_HTTP\', true); to wp-config.php.', 'agentic-seo-visibility'); ?></p></div>
+          <?php endif; ?>
           <form method="post" action="<?php echo esc_url($action_url); ?>" style="margin-top:20px">
             <?php wp_nonce_field('visibility_pair'); ?>
             <input type="hidden" name="action" value="visibility_pair" />

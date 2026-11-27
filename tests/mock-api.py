@@ -42,6 +42,12 @@ class H(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(n) or b"{}")
         with lock:
             s = load()
+            if self.path.endswith("/plugin/pair"):
+                s.setdefault("pairs", []).append(body); save(s)
+                return self.send(200, s.get("pair", {"siteToken": "vis-paired-token", "projectId": "p1", "siteId": "s1"}))
+            if self.path.endswith("/plugin/disconnect"):
+                s.setdefault("disconnects", []).append(body); save(s)
+                return self.send(200, {"ok": True})
             if self.path.endswith("/heartbeat"):
                 s.setdefault("heartbeats", []).append(body); s["heartbeatAuth"] = self.headers.get("Authorization", ""); save(s)
                 return self.send(200, s.get("heartbeat", {"siteId": "test-site-1"}))

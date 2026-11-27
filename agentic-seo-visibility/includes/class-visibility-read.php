@@ -321,12 +321,13 @@ class Visibility_Read {
       // #471: the site profile's hash, so Visibility fetches GET /profile only when it changed.
       'profile'       => class_exists('Visibility_Profile') ? Visibility_Profile::summary() : null,
       'auth'          => Visibility_Auth::describe(),
+      'limits'        => Visibility_Limits::describe(),
       'cron'          => [
         'wpCronDisabled' => defined('DISABLE_WP_CRON') && DISABLE_WP_CRON,
         'nextPull'       => $next('visibility_pull_approved_requests'),
         'nextHeartbeat'  => $next('visibility_daily_heartbeat'),
       ] + Visibility_Requests::describe(),
-      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver', 'builder.read', 'seo.theme', 'multilingual.translatepress', 'fields.carbon', 'meta.inventory', 'meta.write', 'seo.custom', 'blocks.summary', 'terms.assign', 'terms.create', 'site.profile'],
+      'features'      => ['read.rich', 'posts.types', 'seo.write', 'seo.terms', 'content.modifiedGmt', 'media.attach', 'links.internal', 'requests.dedupe', 'policy.enforced', 'content.edit_parts', 'changes.rollback', 'cache.purge', 'author.default', 'controls.enforced', 'fields.write', 'builder.edit', 'multilingual.polylang', 'multilingual.wpml', 'woocommerce.products', 'terms.update', 'builder.divi', 'builder.wpbakery', 'fields.jetengine', 'cache.host', 'redirects.manage', 'redirects.auto', 'cron.status', 'auth.signed', 'auth.rotate', 'media.bulk_alt', 'builder.beaver', 'builder.read', 'seo.theme', 'multilingual.translatepress', 'fields.carbon', 'meta.inventory', 'meta.write', 'seo.custom', 'blocks.summary', 'terms.assign', 'terms.create', 'site.profile', 'auth.disconnect', 'limits.enforced', 'posts.schedule_checked', 'blocks.faq', 'blocks.howto', 'blocks.checks'],
     ];
   }
 }
