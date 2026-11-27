@@ -257,10 +257,15 @@ class Visibility_Settings {
               echo esc_html($names ? implode(', ', $names) : __('none', 'agentic-seo-visibility'));
             ?></td></tr>
           <tr><th scope="row"><?php echo esc_html__('Custom fields agents may change', 'agentic-seo-visibility'); ?></th>
-            <td><?php echo esc_html($c['fieldAllowlist'] ? implode(', ', $c['fieldAllowlist']) : __('none', 'agentic-seo-visibility')); ?></td></tr>
+            <td><?php
+              // "Any post setting" (#581): say so instead of "none".
+              $fields = array_values(array_diff($c['fieldAllowlist'], ['meta:*']));
+              $parts = Visibility_Policy::any_post_meta() ? [__('any post setting (except protected ones)', 'agentic-seo-visibility')] : [];
+              echo esc_html(($parts || $fields) ? implode(', ', array_merge($parts, $fields)) : __('none', 'agentic-seo-visibility'));
+            ?></td></tr>
         </table>
       <?php endif; ?>
-      <p><a href="<?php echo esc_url(trailingslashit(visibility_api_base_url())); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Change these in Visibility (website Settings › WordPress)', 'agentic-seo-visibility'); ?></a></p>
+      <p><a href="<?php echo esc_url(trailingslashit(visibility_api_base_url())); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Change these in Visibility (Settings › Integrations › your website › WordPress)', 'agentic-seo-visibility'); ?></a></p>
     </div>
     <?php
   }
@@ -474,7 +479,7 @@ class Visibility_Settings {
               echo wp_kses(
                 sprintf(
                   /* translators: %s: link to Visibility dashboard */
-                  __('Open the WordPress integration in <a href="%s" target="_blank" rel="noopener">your Visibility project</a> and click <strong>Connect via plugin</strong> to generate a code.', 'agentic-seo-visibility'),
+                  __('In <a href="%s" target="_blank" rel="noopener">Visibility</a>, open <strong>Settings › Integrations</strong>, pick your website, click <strong>Connect</strong> and choose <strong>WordPress</strong> to get a pairing code.', 'agentic-seo-visibility'),
                   $dashboard
                 ),
                 ['a' => ['href' => [], 'target' => [], 'rel' => []], 'strong' => []]

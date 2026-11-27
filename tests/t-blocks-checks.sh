@@ -103,7 +103,9 @@ for p in "$B1 core/image" "$B2 core/quote" "$B3 core/code" "$B4 core/list"; do s
 done
 check "$(sum $G1)" "[]" "the same blocks written correctly: nothing reported"
 E=$(editor $B1 $B2 $B3 $B4 $G1)
-check "$(echo "$E" | python3 -c "import sys,json; print([bool(json.loads(l)['invalid']) for l in sys.stdin])")" "[True, True, True, True, False]" "editor (control) agrees: four invalid, the good forms valid"
+# WordPress before 6.2 has no inner blocks in quotes and lists, so the "good" forms are newer than its editor.
+if [ "$($WP $S eval 'echo version_compare(get_bloginfo("version"), "6.2", ">=") ? 1 : 0;')" = 1 ]; then GOOD=False; else GOOD=True; fi
+check "$(echo "$E" | python3 -c "import sys,json; print([bool(json.loads(l)['invalid']) for l in sys.stdin])")" "[True, True, True, True, $GOOD]" "editor (control) agrees: four invalid, the good forms valid (WordPress 6.2+)"
 for p in $B1 $B2 $B3 $B4 $G1; do $WP $S post delete $p --force >/dev/null; done
 $WP $S post delete $MID --force >/dev/null
 

@@ -4,7 +4,7 @@ Tags: agentic seo, ai content, ai writer, content automation, seo
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.1.1
+Stable tag: 2.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,10 @@ You can disconnect at any time from Agentic SEO → Connection, or from Visibili
 = Do I need to create an Application Password? =
 
 No. Pairing produces a shared site token that the plugin uses. No WordPress user password is involved at any point, and you don't need to enable Application Passwords in your WP user profile.
+
+= Does my site need https? =
+
+Yes, to pair. The connection key travels with every request from Visibility, so the plugin only pairs a site whose address starts with https://. For a local test site you can allow http by adding `define('VISIBILITY_ALLOW_HTTP', true);` to wp-config.php.
 
 = Can AI agents publish to WordPress automatically through this plugin? =
 
@@ -117,6 +121,49 @@ Service URL: https://app.visibility.so
 Terms of service & privacy policy: linked from the Visibility dashboard footer.
 
 == Changelog ==
+
+= 2.1.2 =
+* **Changes sent at the same moment.** When Visibility sends two changes to
+  the same page at once, only the first is saved and the other is told the
+  page changed, instead of both being reported as done while one was lost.
+  Undoing the same change twice at once now undoes it only once.
+* **Faster page loads after an update.** Telling Visibility about a new
+  version, and catching up on missed approvals, now happen after the page is
+  sent, so a slow connection to Visibility never keeps a visitor waiting.
+  The new version is only marked as reported once Visibility got it, and the
+  catch-up reports a few results at a time.
+* **Multisite.** Every site of a network now gets the daily check-in and the
+  5-minute job for missed approvals, not only the main site.
+* **Scheduled posts stay scheduled.** A post scheduled for a later date is no
+  longer published straight away; if WordPress does not keep it scheduled,
+  Visibility is told instead of hearing "done".
+* **No silent failures.** Listing trashed posts shows the trash, an unknown
+  status is refused, a language on a site without a language plugin is
+  refused instead of dropped, and category or tag ids that don't exist are
+  reported back.
+* **Redirects on a site in a folder.** The home page, login, admin and REST
+  addresses can't be redirected on a site that lives in a folder such as
+  /blog/, and badly written addresses are refused.
+* **Safer connection.** Pairing needs https (a local test site can allow http
+  with VISIBILITY_ALLOW_HTTP in wp-config.php), new connections only accept
+  signed requests, and very large requests or too many requests a minute get
+  a clear "too large" or "too many requests" answer. Connected sites keep
+  working as before.
+* **Disconnect from Visibility.** When you disconnect the site in Visibility,
+  this plugin's page now says it is no longer connected.
+* **FAQ and How-to blocks.** Agents can add your site's own FAQ or How-to block
+  (Rank Math, Yoast or the WordPress Details block), built so the block editor
+  accepts it, instead of writing the block by hand.
+* **Better checks after saving.** The plugin tells Visibility when a saved
+  page has blocks the editor would mark as broken: a page-head tag written in
+  the text, HTML that isn't closed, a FAQ block whose parts disagree, and
+  images, lists, quotes or code blocks written in a way the editor rejects.
+  Plain HTML is no longer added outside the blocks of a block page.
+* **Clearer message** when an agent tries to add a new custom field that you
+  haven't named in your list.
+* **Clearer plugin page.** The pairing steps and the link to change what
+  agents may do name the right place in Visibility (Settings › Integrations),
+  and "Any post setting" is shown when it is on instead of "none".
 
 = 2.1.1 =
 * **Update notice.** When a newer version of this plugin is available,
