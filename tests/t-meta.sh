@@ -95,6 +95,7 @@ R=$(action $S meta.update "{\"postId\":$P,\"meta\":{\"_my_plugin_note\":\"Change
 check "$(echo "$R" | jget "(d['ok'], d['result']['after']['_my_plugin_note'])")" "(True, 'Changed <em>note</em>')" "any-meta mode: existing protected key written (HTML kept, kses)"
 R=$(action $S meta.update "{\"postId\":$P,\"meta\":{\"never_seen\":\"x\"}}")
 check "$(code "$R")" "not_found" "any-meta mode: new unregistered key refused"
+check "$(echo "$R" | jget "'must be named in the owner' in d['error']")" "True" "and the message gives the real reason (#575)"
 check "$($WP $S post meta get $P never_seen | tr -d '\r')" "" "nothing created"
 R=$(action $S meta.update "{\"postId\":$P,\"meta\":{\"_my_plugin_note\":\"ok\",\"my_api_token\":\"x\"}}")
 check "$(code "$R")|$($WP $S post meta get $P _my_plugin_note | tr -d '\r')" "not_allowed|Changed <em>note</em>" "all or nothing"

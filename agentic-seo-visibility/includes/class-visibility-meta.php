@@ -236,7 +236,7 @@ class Visibility_Meta {
     $named = Visibility_Policy::field_allowed('meta:' . $key);
     if (!Visibility_Policy::meta_allowed($key, $exists || $args)) {
       if (!$exists && !$args && !$named && Visibility_Policy::meta_allowed($key, true)) {
-        return new WP_Error('not_found', sprintf('Meta %s does not exist on this %s; only a key the owner names in the allowlist can be added.', $key, $post->post_type));
+        return new WP_Error('not_found', sprintf('A new key must be named in the owner\'s allowlist: %s is not on this %s yet, and "any post setting" only changes keys a post already has (add meta:%s to the allowlist to create it).', $key, $post->post_type, $key));
       }
       return new WP_Error('not_allowed', sprintf('Meta %s is not in the owner\'s allowlist.', $key));
     }
