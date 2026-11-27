@@ -2,7 +2,7 @@
 # T12 / #272: an approved request runs exactly once, even when reporting the
 # result fails, and when the push and the cron tick fire at the same time.
 cd "$(dirname "$0")"; . ./lib.sh
-S=1; PORT=3999; STATE=$(mktemp)
+S=${SITE:-1}; PORT=${MOCK_PORT:-3999}; STATE=$(mktemp)
 python3 mock-api.py $PORT "$STATE" & MOCK=$!; trap 'kill $MOCK' EXIT; sleep 1
 $WP $S option update visibility_dev_api_base "http://host.docker.internal:$PORT" >/dev/null
 # Start clean: unreported records left by other checks would be retried on
@@ -46,6 +46,21 @@ check "$(cat /tmp/t12push* | grep -o '"ok":true' | wc -l)" "3" "every push got t
 R=$(action $S post.create_draft "$P" "$R2")
 check "$(echo "$R" | jget "['duplicate']")" "True" "replayed push is a duplicate"
 check "$(count "$T2")" "1" "still one draft"
+
+# 4. #568: ten edits at once with the same modifiedGmt -> exactly one wins, nine conflict;
+#    ten undos of that change at once -> exactly one.
+ID=$(api $S POST /posts '{"title":"T12 race568","content":"<!-- wp:paragraph -->\n<p>orig</p>\n<!-- /wp:paragraph -->","status":"draft"}' | jget "['id']")
+M=$(api $S GET "/posts/$ID" | jget "['modifiedGmt']")
+rm -f /tmp/t12e_* /tmp/t12r_*
+for i in 0 1 2 3 4 5 6 7 8 9; do action $S post.edit_parts "{\"postId\":$ID,\"modifiedGmt\":\"$M\",\"edits\":[{\"target\":{\"path\":\"0\"},\"op\":\"replace_text\",\"find\":\"orig\",\"text\":\"writer $i\"}]}" > /tmp/t12e_$i & P4="$P4 $!"; done; wait $P4
+check "$(cat /tmp/t12e_* | grep -o '"ok":true' | wc -l)" "1" "10 simultaneous edits, same modifiedGmt: one ok"
+check "$(cat /tmp/t12e_* | grep -o '"errorCode":"conflict"' | wc -l)" "9" "the other nine are conflicts"
+W=$(grep -l '"ok":true' /tmp/t12e_* | head -1)
+CH=$(python3 -c "import json;print(json.load(open('$W'))['result']['changeId'])")
+check "$(api $S GET "/posts/$ID" | jget "['content']" | grep -o 'writer [0-9]' | wc -l)" "1" "one writer's text on the page"
+for i in 0 1 2 3 4 5 6 7 8 9; do api $S POST /changes/$CH/rollback > /tmp/t12r_$i & P5="$P5 $!"; done; wait $P5
+check "$(cat /tmp/t12r_* | grep -o '"ok":true' | wc -l)" "1" "10 simultaneous undos: exactly one applied"
+check "$(api $S GET "/posts/$ID" | jget "['content']" | grep -c '<p>orig</p>')" "1" "content back to the original"
 
 $WP $S option delete visibility_dev_api_base >/dev/null
 summary

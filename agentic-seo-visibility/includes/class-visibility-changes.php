@@ -285,6 +285,13 @@ class Visibility_Changes {
     return $wpdb->insert_id ? (string) $wpdb->insert_id : null;
   }
 
+  /** True when the post differs from the snapshot taken by begin(). */
+  public static function changed_since_begin($post_id) {
+    $post_id = (int) $post_id;
+    if (!isset(self::$open[$post_id])) return false;
+    return (bool) self::diff(self::$open[$post_id], self::state($post_id));
+  }
+
   /** Forget an open snapshot (the write failed). */
   public static function abort($post_id) {
     unset(self::$open[(int) $post_id]);
@@ -361,6 +368,23 @@ class Visibility_Changes {
    *         WP_Error with code conflict / not_found / already_rolled_back.
    */
   public static function rollback($id, $source = 'action') {
+    // One rollback of a change at a time, and one writer per post (#568).
+    if (!Visibility_Content::lock('change:' . (int) $id)) return new WP_Error('conflict', 'This change is being rolled back right now.');
+    try {
+      $row = self::get($id);
+      $post_id = $row ? (int) $row->post_id : 0;
+      if ($post_id && !Visibility_Content::lock($post_id)) return new WP_Error('conflict', 'Another change to this post is being saved right now. Read it again and retry.');
+      try {
+        return self::rollback_locked($id, $source);
+      } finally {
+        if ($post_id) Visibility_Content::unlock($post_id);
+      }
+    } finally {
+      Visibility_Content::unlock('change:' . (int) $id);
+    }
+  }
+
+  private static function rollback_locked($id, $source) {
     global $wpdb;
     $row = self::get($id);
     if (!$row) return new WP_Error('not_found', 'Change not found.');
@@ -383,6 +407,7 @@ class Visibility_Changes {
       return new WP_Error('conflict', 'The page was changed after this change was made, so it was not rolled back: ' . implode(', ', $drift) . '.', ['modifiedGmt' => $now['modifiedGmt'], 'changedSince' => $drift]);
     }
 
+    $before_gmt = $now['modifiedGmt'];
     self::begin($post_id);
     if ($before === null) {
       // The change created this post: undo = move it to the trash.
@@ -390,6 +415,7 @@ class Visibility_Changes {
     } else {
       self::restore($post_id, $before, $changed);
     }
+    if (self::changed_since_begin($post_id)) Visibility_Content::advance_modified($post_id, $before_gmt);
     $new_id = self::commit($post_id, 'change.rollback', $source, false, (int) $row->id);
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the plugin's own change log and exact meta snapshots for rollback.
     $wpdb->update(self::table(), ['rolled_back_at' => current_time('mysql', true), 'rolled_back_by' => $new_id ? (int) $new_id : null], ['id' => (int) $row->id]);

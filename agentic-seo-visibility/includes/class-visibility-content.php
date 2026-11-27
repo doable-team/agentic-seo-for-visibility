@@ -139,6 +139,54 @@ class Visibility_Content {
     return $result;
   }
 
+  /** Locks held by this request: name => depth. */
+  private static $locks = [];
+
+  /**
+   * One writer at a time per post (#568): the modifiedGmt check and the write
+   * happen under a MySQL named lock, so requests sent at the same moment with
+   * the same modifiedGmt are serialised and all but the first see a conflict.
+   * Re-entrant within a request. False when the lock could not be taken.
+   */
+  public static function lock($key, $wait = 10) {
+    global $wpdb;
+    $name = 'vis_' . md5(DB_NAME . '|' . $wpdb->prefix . '|' . $key);
+    if (isset(self::$locks[$name])) { self::$locks[$name]++; return true; }
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- a named lock serialises writes to one post across processes.
+    $got = $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, %d)', $name, (int) $wait));
+    if ((string) $got !== '1') return false;
+    self::$locks[$name] = 1;
+    if (is_numeric($key)) clean_post_cache((int) $key);
+    return true;
+  }
+
+  public static function unlock($key) {
+    global $wpdb;
+    $name = 'vis_' . md5(DB_NAME . '|' . $wpdb->prefix . '|' . $key);
+    if (!isset(self::$locks[$name])) return;
+    if (--self::$locks[$name] > 0) return;
+    unset(self::$locks[$name]);
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- releases the lock taken in lock().
+    $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $name));
+  }
+
+  /**
+   * modifiedGmt has one-second resolution, so two writes in the same second
+   * left the same token and a second caller holding the old one passed the
+   * check (#568). After a change, the post's modified time is moved on to at
+   * least one second after the one the change started from.
+   */
+  public static function advance_modified($post_id, $before_gmt) {
+    global $wpdb;
+    $before = strtotime((string) $before_gmt);
+    $now = strtotime((string) self::modified_gmt($post_id));
+    if ($before === false || $now === false || $now > $before) return;
+    $gmt = gmdate('Y-m-d H:i:s', $before + 1);
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- only the modified time, without running save_post again.
+    $wpdb->update($wpdb->posts, ['post_modified_gmt' => $gmt, 'post_modified' => get_date_from_gmt($gmt)], ['ID' => (int) $post_id]);
+    clean_post_cache((int) $post_id);
+  }
+
   /** post_modified_gmt as ISO 8601 UTC ("2026-11-13T18:55:14Z"), the optimistic-lock token. */
   public static function modified_gmt($post) {
     $post = get_post($post);

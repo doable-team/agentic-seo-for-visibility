@@ -464,6 +464,19 @@ class Visibility_REST {
   }
 
   public function update_post(WP_REST_Request $request) {
+    // One writer at a time per post (#568).
+    $id = (int) $request['id'];
+    if (!Visibility_Content::lock($id)) {
+      return new WP_Error('visibility_conflict', __('Another change to this post is being saved right now. Read it again and retry.', 'agentic-seo-visibility'), ['status' => 409]);
+    }
+    try {
+      return $this->update_post_locked($request);
+    } finally {
+      Visibility_Content::unlock($id);
+    }
+  }
+
+  private function update_post_locked(WP_REST_Request $request) {
     $id = (int) $request['id'];
     $existing = $this->readable_post($id);
     if (is_wp_error($existing)) return $existing;
@@ -482,6 +495,7 @@ class Visibility_REST {
     if ($guard) return new WP_Error('visibility_unsupported', $guard, ['status' => 409]);
     $old_slug = $existing->post_name;
     $old_url = get_permalink($existing);
+    $before_gmt = Visibility_Content::modified_gmt($id);
     Visibility_Changes::begin($id);
     $updated = Visibility_Content::save($args);
     if (is_wp_error($updated)) {
@@ -490,6 +504,7 @@ class Visibility_REST {
     }
     $this->apply_term_assignments($id, $params);
     $this->apply_featured_media($id, $params);
+    if (Visibility_Changes::changed_since_begin($id)) Visibility_Content::advance_modified($id, $before_gmt);
     // Before the commit, so a redirect added for the old address is undone with the change.
     $slug = Visibility_Executor::slug_note($existing, $old_slug, $old_url);
     $change = Visibility_Changes::commit($id, 'rest.update', 'rest');

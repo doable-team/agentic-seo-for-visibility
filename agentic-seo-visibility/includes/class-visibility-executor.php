@@ -53,15 +53,25 @@ class Visibility_Executor {
       $bad = Visibility_WooCommerce::commercial_key(array_keys($payload['fields']));
       if ($bad !== null) return self::fail('not_allowed', Visibility_WooCommerce::commercial_refusal($bad));
     }
-    if ($target) Visibility_Changes::begin($target);
-    try {
-      $res = self::{$method}($payload);
-    } catch (\Throwable $e) {
-      if ($target) Visibility_Changes::abort($target);
-      Visibility_Redirects::$linked = [];
-      return [false, null, $e->getMessage()];
+    // One writer at a time per post (#568): check modifiedGmt and write under a lock.
+    if ($target && !Visibility_Content::lock($target)) {
+      return self::fail('conflict', 'Another change to this post is being saved right now. Read it again and retry.');
     }
-    return self::after_write($action_type, $target, $res, $payload);
+    try {
+      $before_gmt = $target ? Visibility_Content::modified_gmt($target) : null;
+      if ($target) Visibility_Changes::begin($target);
+      try {
+        $res = self::{$method}($payload);
+      } catch (\Throwable $e) {
+        if ($target) Visibility_Changes::abort($target);
+        Visibility_Redirects::$linked = [];
+        return [false, null, $e->getMessage()];
+      }
+      if ($target && $res[0] && $before_gmt && Visibility_Changes::changed_since_begin($target)) Visibility_Content::advance_modified($target, $before_gmt);
+      return self::after_write($action_type, $target, $res, $payload);
+    } finally {
+      if ($target) Visibility_Content::unlock($target);
+    }
   }
 
   /** Actions that create a post (snapshot after, rollback = trash). */
