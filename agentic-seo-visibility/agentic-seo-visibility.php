@@ -87,17 +87,40 @@ add_filter('cron_schedules', ['Visibility_Requests', 'register_5min_schedule']);
 // Heartbeat: ping Visibility once a day so the dashboard can show a
 // fresh "Last seen" timestamp + the installed plugin version. WP-Cron
 // runs on page loads, so this is best-effort, not guaranteed.
-register_activation_hook(__FILE__, function () {
+function visibility_schedule_events() {
   if (!wp_next_scheduled('visibility_daily_heartbeat')) {
     wp_schedule_event(time() + 60, 'daily', 'visibility_daily_heartbeat');
   }
   Visibility_Requests::activate_cron();
+}
+register_activation_hook(__FILE__, function () {
+  visibility_schedule_events();
   Visibility_Changes::install();
 });
-register_deactivation_hook(__FILE__, function () {
-  // Every occurrence, not just the next one.
-  wp_clear_scheduled_hook('visibility_daily_heartbeat');
-  wp_clear_scheduled_hook(Visibility_Requests::CRON_HOOK);
+// A network-activated plugin runs the activation hook for the main site only,
+// so every other site of the network got neither job (#570). Each site
+// schedules its own on its first request (a cheap check of the cron option),
+// and a new site of the network gets them when it is created.
+add_action('init', function () {
+  if (wp_installing()) return;
+  visibility_schedule_events();
+});
+add_action('wp_initialize_site', function ($site) {
+  if (!function_exists('is_plugin_active_for_network')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
+  if (!is_plugin_active_for_network(plugin_basename(VISIBILITY_PLUGIN_FILE))) return;
+  switch_to_blog((int) $site->blog_id);
+  visibility_schedule_events();
+  restore_current_blog();
+}, 200);
+register_deactivation_hook(__FILE__, function ($network_wide = false) {
+  // Every occurrence, not just the next one; on every site when it was network-wide.
+  $sites = is_multisite() && $network_wide ? get_sites(['fields' => 'ids', 'number' => 0]) : [get_current_blog_id()];
+  foreach ($sites as $id) {
+    if (is_multisite()) switch_to_blog((int) $id);
+    wp_clear_scheduled_hook('visibility_daily_heartbeat');
+    wp_clear_scheduled_hook(Visibility_Requests::CRON_HOOK);
+    if (is_multisite()) restore_current_blog();
+  }
 });
 add_action('visibility_daily_heartbeat', function () {
   Visibility_Client::heartbeat();
