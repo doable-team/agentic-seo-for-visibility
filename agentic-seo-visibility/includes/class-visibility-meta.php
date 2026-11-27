@@ -410,7 +410,80 @@ class Visibility_Meta {
     $open = preg_match_all('/<!--\s+wp:[a-z0-9\/_-]+(\s+\{.*?\})?\s+-->/s', $content);
     $close = preg_match_all('/<!--\s+\/wp:[a-z0-9\/_-]+\s+-->/', $content);
     if ($open !== $close) $invalid[] = sprintf('Block comments do not match: %d opening, %d closing.', $open, $close);
-    return ['hasBlocks' => (bool) $has, 'total' => $total, 'classicBlocks' => $classic, 'items' => $items, 'invalid' => $invalid];
+    // 2.1.2 (#567): what the editor and the browser trip over, block by block.
+    $problems = self::block_problems($blocks);
+    foreach ($problems as $p) $invalid[] = $p['detail'];
+    return ['hasBlocks' => (bool) $has, 'total' => $total, 'classicBlocks' => $classic, 'items' => $items, 'invalid' => $invalid, 'problems' => $problems];
+  }
+
+  /** Tags that belong in the page head; in the body they break the page (a <title> swallows the rest of it). */
+  const HEAD_TAGS = ['title', 'head', 'html', 'body', 'base', 'meta', 'link'];
+  const VOID_TAGS = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+  /** End tag may be left out in HTML. */
+  const OPTIONAL_END = ['p', 'li', 'dt', 'dd', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'option', 'optgroup', 'colgroup', 'caption', 'rt', 'rp'];
+  /** Blocks whose HTML is the owner's own and may be split across blocks. */
+  const RAW_BLOCKS = ['core/html', 'core/freeform', 'core/shortcode'];
+
+  /**
+   * Problems in the blocks' own HTML (#567), as
+   * [{block, path, kind: unbalanced|head_tag|faq_mismatch, detail}]:
+   * - unbalanced: an element opened and not closed (or closed and never
+   *   opened) inside one block, which the editor reports as invalid content;
+   * - head_tag: <title>, <meta>, <link>… in the body (a stray <title> hides
+   *   everything after it on the live page);
+   * - faq_mismatch: a Rank Math / Yoast FAQ or How-to block whose attributes
+   *   and HTML say different things.
+   */
+  public static function block_problems(array $blocks, $prefix = '') {
+    $out = [];
+    foreach (array_values(array_filter($blocks, function ($b) { return $b['blockName'] !== null; })) as $i => $b) {
+      $path = $prefix === '' ? (string) $i : $prefix . '.' . $i;
+      $name = $b['blockName'];
+      $own = implode('', array_filter((array) $b['innerContent'], 'is_string'));
+      $own = preg_replace('/<!--.*?-->/s', '', $own);
+      $scan = preg_replace('#<(script|style|textarea|code)\b[^>]*>.*?</\1>#is', '', $own);
+      $head = [];
+      if (preg_match_all('#<(title|head|html|body|base|meta|link)\b#i', $scan, $m)) {
+        foreach ($m[1] as $t) {
+          $t = strtolower($t);
+          if (in_array($t, ['meta', 'link'], true) && in_array($name, self::RAW_BLOCKS, true)) continue;
+          $head[$t] = true;
+        }
+      }
+      if ($head) {
+        $out[] = ['block' => $name, 'path' => $path, 'kind' => 'head_tag', 'detail' => sprintf('Block %s (%s) has %s in its text: a page-head tag in the body breaks the page (a <title> hides everything after it). Write the tag as text, for example in backticks, so it is shown as characters.', $path, $name, implode(', ', array_map(function ($t) { return '<' . $t . '>'; }, array_keys($head))))];
+      }
+      if (!in_array($name, self::RAW_BLOCKS, true)) {
+        $bad = self::unbalanced($scan);
+        if ($bad !== null) $out[] = ['block' => $name, 'path' => $path, 'kind' => 'unbalanced', 'detail' => sprintf('Block %s (%s) has HTML that does not close properly (%s); the block editor marks it invalid.', $path, $name, $bad)];
+      }
+      if (class_exists('Visibility_FAQ')) {
+        $mm = Visibility_FAQ::mismatch($b);
+        if ($mm !== null) $out[] = ['block' => $name, 'path' => $path, 'kind' => 'faq_mismatch', 'detail' => sprintf('Block %s (%s): %s; the block editor marks it invalid. Build it with POST /blocks/faq instead of by hand.', $path, $name, $mm)];
+      }
+      if (!empty($b['innerBlocks'])) $out = array_merge($out, self::block_problems($b['innerBlocks'], $path));
+    }
+    return $out;
+  }
+
+  /** The first nesting error in an HTML fragment, or null. */
+  private static function unbalanced($html) {
+    if (!preg_match_all('#<(/?)([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(/?)>#', $html, $m, PREG_SET_ORDER)) return null;
+    $stack = [];
+    foreach ($m as $t) {
+      $tag = strtolower($t[2]);
+      if (in_array($tag, self::VOID_TAGS, true) || $t[3] === '/') continue;
+      if ($t[1] === '') { $stack[] = $tag; continue; }
+      $at = array_search($tag, array_reverse($stack, true), true);
+      if ($at === false) return sprintf('</%s> without <%s>', $tag, $tag);
+      while (count($stack) - 1 > $at) {
+        $open = array_pop($stack);
+        if (!in_array($open, self::OPTIONAL_END, true)) return sprintf('<%s> is not closed before </%s>', $open, $tag);
+      }
+      array_pop($stack);
+    }
+    foreach ($stack as $open) if (!in_array($open, self::OPTIONAL_END, true)) return sprintf('<%s> is never closed', $open);
+    return null;
   }
 
   /** Block attributes with long values replaced by a size note. */

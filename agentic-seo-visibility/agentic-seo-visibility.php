@@ -61,6 +61,7 @@ require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-seo-head.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-schema.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-redirects.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-profile.php';
+require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-faq.php';
 require_once VISIBILITY_PLUGIN_DIR . 'includes/class-visibility-update-notice.php';
 
 add_action('plugins_loaded', function () {

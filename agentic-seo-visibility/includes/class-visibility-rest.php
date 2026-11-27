@@ -102,6 +102,13 @@ class Visibility_REST {
       'permission_callback' => [$this, 'authenticate'],
     ]);
 
+    // FAQ / How-to block built from questions and answers (#571).
+    register_rest_route('visibility/v1', '/blocks/faq', [
+      'methods'             => 'POST',
+      'callback'            => [$this, 'build_faq'],
+      'permission_callback' => [$this, 'authenticate'],
+    ]);
+
     // Disconnect from Visibility's side (#580): the site forgets its pairing,
     // so WP admin stops saying "Connected". Signed requests only.
     register_rest_route('visibility/v1', '/auth/disconnect', [
@@ -326,6 +333,14 @@ class Visibility_REST {
     $body = $request->get_json_params();
     $req = is_array($body) && array_key_exists('requireSignature', $body) && $body['requireSignature'] !== null ? (bool) $body['requireSignature'] : null;
     return rest_ensure_response(Visibility_Auth::rotate($req));
+  }
+
+  /** POST /blocks/faq: the block markup, ready to put in post_content. Writes nothing. */
+  public function build_faq(WP_REST_Request $request) {
+    $body = $request->get_json_params();
+    if (!is_array($body)) return new WP_Error('visibility_bad_body', 'JSON body required.', ['status' => 400]);
+    $r = Visibility_FAQ::build($body);
+    return is_wp_error($r) ? $r : rest_ensure_response($r);
   }
 
   /** POST /auth/disconnect: Visibility removed this site; forget the pairing without calling back. */

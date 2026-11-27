@@ -62,7 +62,10 @@ class Visibility_Profile {
       'editor'       => Visibility_Read::type_editor('post'),
       'blockTheme'   => function_exists('wp_is_block_theme') ? (bool) wp_is_block_theme() : false,
       'seoPlugin'    => class_exists('Visibility_SEO') ? Visibility_SEO::adapter()->name() : null,
-      'blocks'       => self::blocks(array_merge($posts, $pages)),
+      'blocks'       => $blocks = self::blocks(array_merge($posts, $pages)),
+      // #571: FAQ / How-to blocks the site's posts use (most used first), for POST /blocks/faq.
+      'faqBlocks'    => self::kind_used($blocks, Visibility_FAQ::FAQ_BLOCKS),
+      'howtoBlocks'  => self::kind_used($blocks, Visibility_FAQ::HOWTO_BLOCKS),
       'taxonomies'   => self::taxonomies(),
       'postMeta'     => self::post_meta(array_merge($posts, $pages)),
       'options'      => self::options(),
@@ -115,6 +118,12 @@ class Visibility_Profile {
       if (count($used) >= 40) break;
     }
     return ['registered' => $registered, 'used' => $used, 'postsRead' => count($posts)];
+  }
+
+  private static function kind_used(array $blocks, array $names) {
+    $out = [];
+    foreach ($blocks['used'] as $b) if (in_array($b['name'], $names, true)) $out[] = $b['name'];
+    return $out;
   }
 
   private static function taxonomies() {
