@@ -457,6 +457,8 @@ class Visibility_Meta {
         $bad = self::unbalanced($scan);
         if ($bad !== null) $out[] = ['block' => $name, 'path' => $path, 'kind' => 'unbalanced', 'detail' => sprintf('Block %s (%s) has HTML that does not close properly (%s); the block editor marks it invalid.', $path, $name, $bad)];
       }
+      $core = self::core_mismatch($b, $own);
+      if ($core !== null) $out[] = ['block' => $name, 'path' => $path, 'kind' => 'block_attrs', 'detail' => sprintf('Block %s (%s): %s; the block editor marks it invalid.', $path, $name, $core)];
       if (class_exists('Visibility_FAQ')) {
         $mm = Visibility_FAQ::mismatch($b);
         if ($mm !== null) $out[] = ['block' => $name, 'path' => $path, 'kind' => 'faq_mismatch', 'detail' => sprintf('Block %s (%s): %s; the block editor marks it invalid. Build it with POST /blocks/faq instead of by hand.', $path, $name, $mm)];
@@ -464,6 +466,34 @@ class Visibility_Meta {
       if (!empty($b['innerBlocks'])) $out = array_merge($out, self::block_problems($b['innerBlocks'], $path));
     }
     return $out;
+  }
+
+  /**
+   * Core blocks whose HTML says something their attributes don't (#573): the
+   * editor rebuilds the HTML from the attributes, sees a difference and marks
+   * the block invalid.
+   */
+  private static function core_mismatch(array $b, $own) {
+    $a = is_array($b['attrs']) ? $b['attrs'] : [];
+    switch ($b['blockName']) {
+      case 'core/image':
+        if (preg_match('/\bwp-image-(\d+)\b/', $own, $m) && (int) ($a['id'] ?? 0) !== (int) $m[1]) {
+          return sprintf('the image has class wp-image-%d but the block\'s "id" is %s (add "id":%d to the block comment)', $m[1], isset($a['id']) ? (int) $a['id'] : 'missing', $m[1]);
+        }
+        return null;
+      case 'core/list':
+        if (preg_match('/^\s*<ol\b[^>]*\bstart="(-?\d+)"/i', $own, $m) && (int) ($a['start'] ?? 0) !== (int) $m[1]) return sprintf('the list starts at %d but the block has no "start":%d', $m[1], $m[1]);
+        if (preg_match('/^\s*<ol\b[^>]*\breversed\b/i', $own) && empty($a['reversed'])) return 'the list is reversed but the block has no "reversed":true';
+        if (preg_match('/^\s*<ol\b/i', $own) && empty($a['ordered'])) return 'the list is numbered (<ol>) but the block has no "ordered":true';
+        return null;
+      case 'core/quote':
+        if (empty($b['innerBlocks']) && trim(wp_strip_all_tags(preg_replace('#<cite\b.*?</cite>#is', '', $own))) !== '') return 'the quote\'s text sits directly in <blockquote> instead of in paragraph blocks inside it';
+        return null;
+      case 'core/code':
+        if (!preg_match('#<pre\b[^>]*>\s*<code\b#i', $own)) return 'a code block needs <pre><code>…</code></pre> (use core/preformatted for <pre> alone)';
+        return null;
+    }
+    return null;
   }
 
   /** The first nesting error in an HTML fragment, or null. */

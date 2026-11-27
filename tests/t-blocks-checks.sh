@@ -2,7 +2,8 @@
 # #567: blockSummary reports what the block editor and the browser trip over:
 # a page-head tag written as words in the text (a <title> hides the rest of the
 # live page), HTML that doesn't close inside a block, and (t-faq-blocks.sh) a FAQ
-# block whose attributes and HTML differ. The four posts from the issue: three
+# block whose attributes and HTML differ; core image / list / quote / code
+# blocks whose HTML doesn't match their attributes (#573). The four posts from the issue: three
 # broken ones are reported, the good one (tags in backticks) is not; the editor
 # result is read in headless Chrome as a control. Needs NODE_PATH + Chrome.
 cd "$(dirname "$0")"; . ./lib.sh
@@ -59,5 +60,52 @@ P5=$(post "fine" '<!-- wp:html -->
 <!-- /wp:list-item --></ul>
 <!-- /wp:list -->')
 check "$(sum $P5)" "[]" "custom HTML block, <br/>, nested list: nothing reported"
+# #573: core blocks whose HTML says what their attributes don't. Each is checked
+# against the editor too (control), then the good forms are not flagged.
+$CTR cp fixtures/og-1200x630.png ${CPFX}$S:/var/www/html/wp-content/og-fixture.png 2>/dev/null; true
+MID=$($WP $S media import /var/www/html/wp-content/og-fixture.png --porcelain 2>/dev/null | tr -d '\r' | tail -1)
+IMGURL=$($WP $S eval "echo wp_get_attachment_url($MID);" | tr -d '\r')
+B1=$(post "img no id" "<!-- wp:image -->
+<figure class=\"wp-block-image\"><img src=\"$IMGURL\" alt=\"x\" class=\"wp-image-$MID\"/></figure>
+<!-- /wp:image -->")
+B2=$(post "plain quote" '<!-- wp:quote -->
+<blockquote class="wp-block-quote">Quality beats quantity.</blockquote>
+<!-- /wp:quote -->')
+B3=$(post "pre no code" '<!-- wp:code -->
+<pre class="wp-block-code">User-agent: *</pre>
+<!-- /wp:code -->')
+B4=$(post "ol start" '<!-- wp:list {"ordered":true} -->
+<ol start="3" class="wp-block-list"><!-- wp:list-item -->
+<li>Three</li>
+<!-- /wp:list-item --></ol>
+<!-- /wp:list -->')
+G1=$(post "good forms" "<!-- wp:image {\"id\":$MID} -->
+<figure class=\"wp-block-image\"><img src=\"$IMGURL\" alt=\"x\" class=\"wp-image-$MID\"/></figure>
+<!-- /wp:image -->
+
+<!-- wp:quote -->
+<blockquote class=\"wp-block-quote\"><!-- wp:paragraph -->
+<p>Quality beats quantity.</p>
+<!-- /wp:paragraph --></blockquote>
+<!-- /wp:quote -->
+
+<!-- wp:code -->
+<pre class=\"wp-block-code\"><code>User-agent: *</code></pre>
+<!-- /wp:code -->
+
+<!-- wp:list {\"ordered\":true,\"start\":3} -->
+<ol start=\"3\" class=\"wp-block-list\"><!-- wp:list-item -->
+<li>Three</li>
+<!-- /wp:list-item --></ol>
+<!-- /wp:list -->")
+for p in "$B1 core/image" "$B2 core/quote" "$B3 core/code" "$B4 core/list"; do set -- $p
+  check "$(sum $1)" "['block_attrs']" "$2 with HTML its attributes don't match: reported"
+done
+check "$(sum $G1)" "[]" "the same blocks written correctly: nothing reported"
+E=$(editor $B1 $B2 $B3 $B4 $G1)
+check "$(echo "$E" | python3 -c "import sys,json; print([bool(json.loads(l)['invalid']) for l in sys.stdin])")" "[True, True, True, True, False]" "editor (control) agrees: four invalid, the good forms valid"
+for p in $B1 $B2 $B3 $B4 $G1; do $WP $S post delete $p --force >/dev/null; done
+$WP $S post delete $MID --force >/dev/null
+
 for p in $P1 $P2 $P3 $P4 $P5; do $WP $S post delete $p --force >/dev/null; done
 summary
