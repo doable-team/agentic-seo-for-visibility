@@ -199,15 +199,30 @@ class Visibility_Redirects {
     return $path;
   }
 
+  /**
+   * One rule for a valid source (#561, shared with the app): decode safely
+   * (a bad escape never skips a check), resolve against the home URL's path,
+   * then refuse the home page and WordPress's admin, login and REST addresses,
+   * both from the domain root and from the folder WordPress lives in.
+   */
   private static function clean_source($source) {
     $source = trim((string) $source);
     if ($source === '') return new WP_Error('invalid', 'source is required (the old address, for example /old-page/).');
+    if (strpos($source, '//') === 0) return new WP_Error('invalid', 'source must be a path on this site such as /old-page/, not //host/….');
     $path = self::to_path($source);
     if ($path === null) return new WP_Error('invalid', 'source must be an address on this site.');
     if (preg_match('/[\s<>"\']/', $path)) return new WP_Error('invalid', 'source must not contain spaces, quotes or angle brackets.');
-    if (self::key($path) === '/') return new WP_Error('invalid', 'The home page cannot be redirected by Visibility.');
-    if (strpos(self::key($path), '/wp-admin') === 0 || strpos(self::key($path), '/wp-json') === 0 || strpos(self::key($path), '/wp-login') === 0) {
-      return new WP_Error('invalid', 'WordPress system addresses cannot be redirected.');
+    if (preg_match('/%(?![0-9a-f]{2})/i', explode('?', $path)[0])) return new WP_Error('invalid', 'source has a broken %-escape.');
+    $keys = [self::key($path)];
+    // Decoded again in case of double encoding (%2577p-admin), and relative to the home folder.
+    $keys[] = self::key(rawurldecode($keys[0]));
+    $rel = '/' . self::relative(explode('?', $keys[1])[0]);
+    $keys[] = self::key($rel);
+    foreach (array_unique($keys) as $k) {
+      if ($k === '/' || $k === '') return new WP_Error('invalid', 'The home page cannot be redirected by Visibility.');
+      if (preg_match('#^/(wp-admin|wp-json|wp-login)#', $k) || preg_match('#^/index\.php/wp-json#', $k)) {
+        return new WP_Error('invalid', 'WordPress system addresses (admin, login, REST API) cannot be redirected.');
+      }
     }
     return $path;
   }
