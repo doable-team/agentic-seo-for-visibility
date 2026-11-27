@@ -316,6 +316,19 @@ class Visibility_Languages {
   }
 
   /**
+   * On a site without a language plugin: a reason to refuse `language` (other
+   * than the site's own) or `translationOf`, or null (#576). Before, both were
+   * dropped without a word and the caller believed the post was in that language.
+   */
+  public static function refuse_without_plugin($language, $source_id = 0) {
+    if (self::active() || self::wpml_present()) return null;
+    $language = is_string($language) ? strtolower(trim(str_replace('_', '-', $language))) : '';
+    $site = strtolower(str_replace('_', '-', get_locale()));
+    if (!$source_id && ($language === '' || $language === $site || $language === explode('-', $site)[0])) return null;
+    return sprintf('This site has no language plugin (Polylang, WPML or TranslatePress), so a post can\'t be put in "%s" or linked as a translation. Every post is in the site\'s language (%s); leave language out.', $language !== '' ? $language : 'another language', get_locale());
+  }
+
+  /**
    * Put a new post in $language and, with $source_id, into the source's
    * translation group. Never changes the source or its other translations.
    * @return true|WP_Error
@@ -333,6 +346,8 @@ class Visibility_Languages {
       if (($language !== '' || $source_id) && self::wpml_present()) {
         return new WP_Error('unsupported', sprintf('WPML is active but does not offer the hooks Visibility uses (%s), so the language was not set. Set it in WordPress.', implode(', ', self::wpml_missing_hooks())));
       }
+      $refused = self::refuse_without_plugin($language, $source_id);
+      if ($refused) return new WP_Error('language_unsupported', $refused);
       return true;
     }
     if ($language === '' && $source_id) return new WP_Error('language_required', 'translationOf needs a language.');

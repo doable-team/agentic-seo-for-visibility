@@ -52,4 +52,23 @@ FRESH=$(api $S GET "/posts/$ID" | jget "['modifiedGmt']")
 R4=$(action $S page.update_content "{\"postId\":$ID,\"modifiedGmt\":\"$FRESH\",\"fields\":{\"title\":\"Agent title\"}}")
 check "$(echo "$R4" | jget "['ok']")" "True" "fresh modifiedGmt -> ok"
 check "$(echo "$R4" | jget "['result']['modifiedGmt'] is not None")" "True" "result returns the new modifiedGmt"
+# #576 (site without a language plugin): language on a new post is refused, not dropped;
+# status=trash lists trashed posts only; an unknown status is refused.
+T="lang probe $RANDOM"
+R=$(api $S POST /posts "{\"title\":\"$T\",\"content\":\"<p>x</p>\",\"status\":\"draft\",\"language\":\"fr\"}")
+check "$(echo "$R" | jget "(d.get('code'), d.get('data',{}).get('status'))")" "('visibility_language_unsupported', 400)" "POST /posts language=fr without a language plugin -> refused"
+check "$($WP $S post list --post_type=post --post_status=any --title="$T" --format=count)" "0" "no draft left behind"
+R=$(action $S post.create_draft "{\"title\":\"$T\",\"content\":\"<p>x</p>\",\"language\":\"fr\"}")
+check "$(echo "$R" | jget "(d['ok'], d.get('errorCode'))")" "(False, 'language_unsupported')" "post.create_draft language=fr -> refused"
+check "$($WP $S post list --post_type=post --post_status=any --title="$T" --format=count)" "0" "still no draft"
+SITE_LANG=$($WP $S eval 'echo substr(get_locale(), 0, 2);')
+R=$(api $S POST /posts "{\"title\":\"$T\",\"content\":\"<p>x</p>\",\"status\":\"draft\",\"language\":\"$SITE_LANG\"}")
+check "$(echo "$R" | jget "d.get('id') is not None")" "True" "the site's own language ($SITE_LANG) is fine"
+$WP $S post delete $(echo "$R" | jget "['id']") --force >/dev/null
+TR=$($WP $S post create --post_title="trash probe" --post_status=publish --porcelain | tr -d '\r' | tail -1); $WP $S post delete $TR >/dev/null
+L=$(api $S GET "/posts?status=trash&per_page=100")
+check "$(echo "$L" | jget "str(sorted(set(i['status'] for i in d['items'])))")" "['trash']" "status=trash lists trashed posts only"
+check "$(echo "$L" | jget "str($TR in [i['id'] for i in d['items']])")" "True" "the trashed post is listed"
+check "$(api $S GET "/posts?status=bogus" | jget "(d.get('code'), d.get('data',{}).get('status'))")" "('visibility_bad_status', 400)" "unknown status -> 400"
+check "$(api $S GET "/posts?status=draft,publish&per_page=50" | jget "str(set(i['status'] for i in d['items']) <= {'draft','publish'})")" "True" "a list of known statuses still works"
 summary

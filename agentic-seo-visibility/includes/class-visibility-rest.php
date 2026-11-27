@@ -352,9 +352,19 @@ class Visibility_REST {
     // 'any' is WordPress's own spelling for "every status" — honour it rather
     // than letting it intersect to nothing and collapse to publish-only.
     if (is_string($statusParam) && $statusParam !== '' && $statusParam !== 'any') {
-      $requested = array_map('sanitize_key', array_map('trim', explode(',', $statusParam)));
-      $statuses  = array_values(array_intersect(self::ALLOWED_STATUSES, $requested));
-      if (empty($statuses)) $statuses = ['publish'];
+      // trash can be listed (not set); an unknown status is refused rather than
+      // quietly turned into "publish" (#576).
+      $listable  = array_merge(self::ALLOWED_STATUSES, ['trash']);
+      $requested = array_values(array_filter(array_map('sanitize_key', array_map('trim', explode(',', $statusParam)))));
+      $bad       = array_diff($requested, $listable);
+      if (!empty($bad) || empty($requested)) {
+        return new WP_Error('visibility_bad_status', sprintf(
+          /* translators: 1: requested statuses, 2: allowed statuses. */
+          __('Unknown post status: %1$s. Use one or more of: %2$s, or any.', 'agentic-seo-visibility'),
+          implode(', ', $bad ?: [$statusParam]), implode(', ', $listable)
+        ), ['status' => 400]);
+      }
+      $statuses = $requested;
     }
 
     $types = $this->requested_types($request->get_param('type'));
@@ -440,6 +450,9 @@ class Visibility_REST {
     if (!in_array($type, ['post', 'page'], true) || !Visibility_Read::type_allowed($type)) {
       return new WP_Error('visibility_bad_type', __('Only posts and pages can be created.', 'agentic-seo-visibility'), ['status' => 400]);
     }
+    // A language the site can't hold is refused, not dropped without a word (#576).
+    $lang_refused = Visibility_Languages::refuse_without_plugin($params['language'] ?? '', (int) ($params['translationOf'] ?? 0));
+    if ($lang_refused) return new WP_Error('visibility_language_unsupported', $lang_refused, ['status' => 400]);
     $args = $this->build_post_args($params, ['post_status' => 'draft', 'post_type' => $type, 'post_author' => Visibility_Author::id()]);
     $post_id = Visibility_Content::save($args);
     if (is_wp_error($post_id)) {
@@ -451,6 +464,7 @@ class Visibility_REST {
       if (is_wp_error($lang)) {
         wp_delete_post($post_id, true);
         $map = ['conflict' => 409, 'not_found' => 404];
+        if ($lang->get_error_code() === 'language_unsupported') $map['language_unsupported'] = 400;
         return new WP_Error('visibility_' . $lang->get_error_code(), $lang->get_error_message(), ['status' => isset($map[$lang->get_error_code()]) ? $map[$lang->get_error_code()] : 400]);
       }
     }
