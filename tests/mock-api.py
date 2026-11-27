@@ -3,7 +3,8 @@
 
 State lives in a JSON file (argv[2]) so a test can set the inbox and read back
 what the plugin reported:
-  {"inbox": [...rows...], "failReports": 1, "reports": [...], "heartbeat": {...}}
+  {"inbox": [...rows...], "failReports": 1, "reports": [...], "heartbeat": {...},
+   "delay": seconds before every answer}
 """
 import json, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,13 +26,18 @@ class H(BaseHTTPRequestHandler):
         b = json.dumps(body).encode()
         self.send_response(code); self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def delay(self):
+        d = load().get("delay", 0)
+        if d: import time; time.sleep(d)
     def do_GET(self):
+        self.delay()
         with lock:
             s = load()
             s.setdefault("gets", []).append(self.path); save(s)
         if "/inbox" in self.path: return self.send(200, s.get("inbox", []))
         return self.send(404, {"error": {"message": "no"}})
     def do_POST(self):
+        self.delay()
         n = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(n) or b"{}")
         with lock:

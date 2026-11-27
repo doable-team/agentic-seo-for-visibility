@@ -136,7 +136,7 @@ class Visibility_Client {
       return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-visibility'));
     }
     $resp = wp_remote_post(visibility_api_base_url() . '/api/wordpress/plugin/heartbeat', [
-      'timeout' => 10,
+      'timeout' => self::timeout(10),
       'headers' => [
         'Authorization' => 'Bearer ' . self::site_token(),
         'Content-Type'  => 'application/json',
@@ -176,6 +176,72 @@ class Visibility_Client {
     return true;
   }
 
+  // ─── Work after the answer ────────────────────────────────────────────
+
+  /** Seconds for calls made to Visibility while a visitor's or Visibility's request is open. */
+  const QUICK_TIMEOUT = 3;
+  /** True while queued work runs after the response: calls use QUICK_TIMEOUT. */
+  public static $quick = false;
+  private static $after = [];
+  private static $buffer_level = 0;
+
+  /**
+   * Run $cb after the response has been sent (#569, #583). PHP-FPM and
+   * LiteSpeed have a call for that; elsewhere (Apache mod_php) the page is
+   * buffered from here on and sent with Content-Length and Connection: close
+   * before the work starts, so the browser or Visibility is not kept waiting.
+   * Call before any output (init, REST permission checks).
+   */
+  public static function after_response(callable $cb) {
+    if (!self::$after) {
+      if (!function_exists('fastcgi_finish_request') && !function_exists('litespeed_finish_request') && !headers_sent() && !(defined('WP_CLI') && WP_CLI) && !ini_get('zlib.output_compression')) {
+        ob_start();
+        self::$buffer_level = ob_get_level();
+      }
+      // Before WordPress flushes every buffer (wp_ob_end_flush_all, priority 1).
+      add_action('shutdown', [__CLASS__, 'finish_response'], 0);
+      add_action('shutdown', [__CLASS__, 'run_after_response'], 100);
+    }
+    self::$after[] = $cb;
+  }
+
+  public static function finish_response() {
+    if (defined('WP_CLI') && WP_CLI) return;
+    if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); return; }
+    if (function_exists('litespeed_finish_request')) { litespeed_finish_request(); return; }
+    if (!self::$buffer_level || ob_get_level() < self::$buffer_level) return;
+    $body = '';
+    while (ob_get_level() >= self::$buffer_level) $body = (string) ob_get_clean() . $body;
+    self::$buffer_level = 0;
+    if (!headers_sent()) {
+      header('Connection: close');
+      header('Content-Length: ' . strlen($body));
+    }
+    echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- the page WordPress already built, sent unchanged.
+    while (ob_get_level() > 0) ob_end_flush();
+    flush();
+  }
+
+  public static function run_after_response() {
+    ignore_user_abort(true);
+    if (function_exists('set_time_limit')) @set_time_limit(120); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- may be disabled on the host.
+    $jobs = self::$after;
+    self::$after = [];
+    self::$quick = true;
+    foreach ($jobs as $cb) {
+      try {
+        call_user_func($cb);
+      } catch (\Throwable $e) {
+        // A failed check-in or report is retried later; never break the shutdown.
+      }
+    }
+    self::$quick = false;
+  }
+
+  private static function timeout($normal) {
+    return self::$quick ? self::QUICK_TIMEOUT : $normal;
+  }
+
   // ─── Action-request API ───────────────────────────────────────────────
 
   private static function site_id() {
@@ -197,7 +263,7 @@ class Visibility_Client {
       return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-visibility'));
     }
     $resp = wp_remote_get(visibility_api_base_url() . $path, [
-      'timeout' => 15,
+      'timeout' => self::timeout(15),
       'headers' => [
         'Authorization' => 'Bearer ' . self::site_token(),
         'Accept'        => 'application/json',
@@ -212,7 +278,7 @@ class Visibility_Client {
       return new WP_Error('visibility_not_paired', __('Site is not paired.', 'agentic-seo-visibility'));
     }
     $resp = wp_remote_post(visibility_api_base_url() . $path, [
-      'timeout' => 20,
+      'timeout' => self::timeout(20),
       'headers' => [
         'Authorization'         => 'Bearer ' . self::site_token(),
         'Content-Type'          => 'application/json',

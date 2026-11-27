@@ -116,16 +116,12 @@ class Visibility_Requests {
     // One catch-up at a time across processes.
     if (get_transient('visibility_catch_up')) return;
     set_transient('visibility_catch_up', 1, 2 * MINUTE_IN_SECONDS);
-    add_action('shutdown', function () {
-      // PHP-FPM / LiteSpeed: send the answer first, then run. Elsewhere it
-      // runs right after the answer is written (one inbox call at most every
-      // 10 minutes). No loopback request: many hosts block those.
-      if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
-      elseif (function_exists('litespeed_finish_request')) litespeed_finish_request();
-      ignore_user_abort(true);
+    // After the answer is sent (#583): Visibility's request is never kept
+    // waiting, also on Apache mod_php. No loopback request: many hosts block those.
+    Visibility_Client::after_response(function () {
       self::run_cron_tick('push');
       delete_transient('visibility_catch_up');
-    }, 100);
+    });
   }
 
   // ─── Run each approved request exactly once ────────────────────────────
@@ -213,10 +209,19 @@ class Visibility_Requests {
     return true;
   }
 
+  /** Results reported per catch-up inside a request; the rest wait for the next tick (#583). */
+  const REPORTS_PER_PUSH = 5;
+  /** Seconds a catch-up spends reporting before leaving the rest for later. */
+  const REPORT_BUDGET = 10;
+
   public static function retry_unreported() {
+    $quick = Visibility_Client::$quick;
+    $sent = 0; $start = microtime(true);
     foreach (self::all_records() as $id => $rec) {
       if ($rec['state'] === 'done' && empty($rec['reported'])) {
+        if ($quick && ($sent >= self::REPORTS_PER_PUSH || microtime(true) - $start > self::REPORT_BUDGET)) break;
         self::report($id, $rec);
+        $sent++;
       }
     }
   }

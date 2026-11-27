@@ -187,7 +187,7 @@ class Visibility_Auth {
     delete_option(self::PENDING);
     update_option(self::ROTATED, time(), false);
     // Tell Visibility with the new token, after this request is answered.
-    add_action('shutdown', ['Visibility_Client', 'heartbeat'], 50);
+    Visibility_Client::after_response(['Visibility_Client', 'heartbeat']);
   }
 
   /** /capabilities `auth`. */

@@ -106,8 +106,23 @@ add_action('visibility_daily_heartbeat', function () {
 // An in-place update doesn't run the activation hook, so Visibility only heard
 // of the new version at the next daily heartbeat and kept saying "update the
 // plugin". The first request on a new version tells it at once (#473).
+//
+// The check-in runs after the page is sent, with a short timeout, so a slow
+// Visibility never holds up a visitor (#569). The new version is only marked
+// as reported once the check-in worked; a failed one is retried on a later
+// request, at most once a minute (#564).
 add_action('init', function () {
   if (get_option('visibility_installed_version', '') === VISIBILITY_PLUGIN_VERSION) return;
-  update_option('visibility_installed_version', VISIBILITY_PLUGIN_VERSION, false);
-  Visibility_Client::heartbeat();
+  if (!Visibility_Client::is_paired()) {
+    update_option('visibility_installed_version', VISIBILITY_PLUGIN_VERSION, false);
+    return;
+  }
+  if (get_transient('visibility_version_report_try')) return;
+  set_transient('visibility_version_report_try', 1, MINUTE_IN_SECONDS);
+  Visibility_Client::after_response(function () {
+    if (Visibility_Client::heartbeat() === true) {
+      update_option('visibility_installed_version', VISIBILITY_PLUGIN_VERSION, false);
+      delete_transient('visibility_version_report_try');
+    }
+  });
 });
