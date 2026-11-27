@@ -470,10 +470,10 @@ class Visibility_REST {
         return new WP_Error('visibility_' . $lang->get_error_code(), $lang->get_error_message(), ['status' => isset($map[$lang->get_error_code()]) ? $map[$lang->get_error_code()] : 400]);
       }
     }
-    $this->apply_term_assignments($post_id, $params);
+    $missing = $this->apply_term_assignments($post_id, $params);
     $this->apply_featured_media($post_id, $params);
     $change = Visibility_Changes::commit($post_id, 'rest.create', 'rest', true);
-    $out = $this->serialize_post_full($post_id);
+    $out = $this->serialize_post_full($post_id) + $missing;
     $out['changeId'] = $change;
     $out['cachePurged'] = Visibility_Cache::purge($post_id);
     return rest_ensure_response($out);
@@ -525,13 +525,13 @@ class Visibility_REST {
       if ($snap) Visibility_Changes::rollback((int) $snap, 'rest');
       return $sched;
     }
-    $this->apply_term_assignments($id, $params);
+    $missing = $this->apply_term_assignments($id, $params);
     $this->apply_featured_media($id, $params);
     if (Visibility_Changes::changed_since_begin($id)) Visibility_Content::advance_modified($id, $before_gmt);
     // Before the commit, so a redirect added for the old address is undone with the change.
     $slug = Visibility_Executor::slug_note($existing, $old_slug, $old_url);
     $change = Visibility_Changes::commit($id, 'rest.update', 'rest');
-    $out = $this->serialize_post_full($id);
+    $out = $this->serialize_post_full($id) + $missing;
     $out['changeId'] = $change;
     $out['cachePurged'] = Visibility_Cache::purge($id);
     $out += $slug;
@@ -608,15 +608,37 @@ class Visibility_REST {
     return $args;
   }
 
-  private function apply_term_assignments($post_id, array $params): void {
+  /**
+   * Categories and tags of a new or updated post. Ids that don't exist used to
+   * be dropped without a word (#563); they are left out and reported as
+   * categoriesNotFound / tagsNotFound.
+   * @return array the "not found" keys to add to the answer
+   */
+  private function apply_term_assignments($post_id, array $params): array {
+    $out = [];
     if (isset($params['categories']) && is_array($params['categories'])) {
       $ids = array_values(array_filter(array_map('intval', $params['categories'])));
-      wp_set_post_categories($post_id, $ids, false);
+      $missing = array_values(array_filter($ids, function ($id) { $t = get_term($id, 'category'); return !$t || is_wp_error($t); }));
+      wp_set_post_categories($post_id, array_values(array_diff($ids, $missing)), false);
+      if ($missing) $out['categoriesNotFound'] = $missing;
     }
     if (isset($params['tags']) && is_array($params['tags'])) {
-      // Accept either numeric IDs or string slugs; wp_set_post_tags handles both.
-      wp_set_post_tags($post_id, $params['tags'], false);
+      // Numeric ids must exist; names are created by WordPress as before.
+      $missing = [];
+      $tags = [];
+      foreach ($params['tags'] as $t) {
+        if (is_int($t) || (is_string($t) && ctype_digit($t))) {
+          $term = get_term((int) $t, 'post_tag');
+          if (!$term || is_wp_error($term)) { $missing[] = (int) $t; continue; }
+          $tags[] = (int) $t;
+        } elseif (is_string($t) && trim($t) !== '') {
+          $tags[] = $t;
+        }
+      }
+      wp_set_post_terms($post_id, $tags, 'post_tag', false);
+      if ($missing) $out['tagsNotFound'] = $missing;
     }
+    return $out;
   }
 
   private function apply_featured_media($post_id, array $params): void {

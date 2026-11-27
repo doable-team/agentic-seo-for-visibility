@@ -57,4 +57,14 @@ R=$(action $S term.create "{\"taxonomy\":\"category\",\"name\":\"Nope $RANDOM\"}
 check "$(echo "$R" | jget "d.get('errorCode')")" "not_allowed" "posts not allowed: blog category create refused"
 api $S POST /events/site-config-changed '{"controls":null}' >/dev/null
 check "$(api $S GET /capabilities | jget "'terms.assign' in d['features'] and 'terms.create' in d['features']")" "True" "features list terms.assign and terms.create"
+# #563: POST / PATCH /posts with category or tag ids that don't exist report them.
+CAT=$($WP $S term create category "t563 cat $RANDOM" --porcelain | tr -d '\r' | tail -1)
+R=$(api $S POST /posts "{\"title\":\"t563 $RANDOM\",\"content\":\"<p>x</p>\",\"categories\":[$CAT,999999],\"tags\":[888888,\"t563-tag\"]}")
+check "$(echo "$R" | jget "(d.get('categoriesNotFound'), d.get('tagsNotFound'), [c['id'] for c in d['categories']] == [$CAT], [t['name'] for t in d['tags']])")" "([999999], [888888], True, ['t563-tag'])" "POST /posts: unknown category and tag ids reported, the real ones set"
+P=$(echo "$R" | jget "['id']")
+R=$(api $S PATCH /posts/$P '{"categories":[777777]}')
+check "$(echo "$R" | jget "d.get('categoriesNotFound')")" "[777777]" "PATCH /posts: unknown category id reported"
+R=$(api $S PATCH /posts/$P "{\"categories\":[$CAT]}")
+check "$(echo "$R" | jget "'categoriesNotFound' in d")" "False" "no key when every id exists"
+$WP $S post delete $P --force >/dev/null; $WP $S term delete category $CAT >/dev/null
 summary
